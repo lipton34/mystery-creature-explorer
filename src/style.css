@@ -1,0 +1,19 @@
+:root { font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", sans-serif; color: #eef5de; background: #122d31; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100dvh; }
+#app { display: flex; flex-direction: column; align-items: center; min-height: 100dvh; padding: 16px 10px; gap: 10px; }
+header { width: min(100%, 760px); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+h1 { font-size: clamp(18px, 4vw, 25px); margin: 0; }
+p { margin: 0; }
+button { cursor: pointer; border: 0; border-radius: 12px; background: #e8c681; color: #2b302b; font: inherit; font-weight: 700; padding: 10px 16px; }
+button:focus-visible { outline: 3px solid white; outline-offset: 2px; }
+#game { width: min(100%, 760px); overflow: hidden; border: 3px solid #567b6d; border-radius: 14px; background: #1b3530; }
+#game canvas { display: block; width: 100%; height: auto; }
+#message { width: min(100%, 760px); min-height: 42px; text-align: center; line-height: 1.6; color: #f9e5b5; }
+#controls { display: grid; grid-template-columns: repeat(3, 54px); grid-template-rows: repeat(2, 48px); gap: 5px; touch-action: none; }
+#controls button { padding: 0; font-size: 22px; background: #c3e0bd; user-select: none; -webkit-user-select: none; touch-action: none; }
+#controls [data-direction="up"] { grid-column: 2; grid-row: 1; }
+#controls [data-direction="left"] { grid-column: 1; grid-row: 2; }
+#controls [data-direction="down"] { grid-column: 2; grid-row: 2; }
+#controls [data-direction="right"] { grid-column: 3; grid-row: 2; }
+footer { color: #aec3ba; font-size: 12px; text-align: center; }
