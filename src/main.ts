@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import "./style.css";
-import { createWorld, isNear, isWalkable, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Point, type World } from "./world";
+import { createWorld, isSameTile, isWalkable, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Point, type World } from "./world";
 import { loadCollection, recordDiscovery } from "./collection";
 import { CREATURES, findCreature, type CreatureDefinition } from "./creatures";
 import { renderEncyclopedia } from "./encyclopedia";
@@ -130,7 +130,7 @@ class ForestScene extends Phaser.Scene {
     if (!isWalkable(this.world, next)) return;
     this.world.player = next;
     for (const encounter of this.world.encounters) {
-      if (encounter.discovered || !isNear(next, encounter.position)) continue;
+      if (encounter.discovered || !isSameTile(next, encounter.position)) continue;
       encounter.discovered = true;
       const creature = findCreature(encounter.id);
       if (!creature) continue;
