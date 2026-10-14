@@ -36,6 +36,7 @@ const game = document.querySelector<HTMLElement>("#game");
 const controls = document.querySelector<HTMLElement>("#controls");
 const toggleBook = document.querySelector<HTMLButtonElement>("#toggle-book");
 let bookOpen = false;
+let phaserGame: Phaser.Game | undefined;
 
 function say(text: string): void { if (message) message.textContent = text; }
 function showBook(open: boolean): void {
@@ -47,7 +48,15 @@ function showBook(open: boolean): void {
     toggleBook.textContent = open ? "🌲 もりにもどる" : "📖 ずかんをみる";
     toggleBook.setAttribute("aria-expanded", String(open));
   }
-  if (open) renderEncyclopedia();
+  if (open) {
+    renderEncyclopedia();
+  } else {
+    // A hidden Phaser parent has zero size. Recalculate FIT after restoring it.
+    // Waiting for the next frame ensures the browser has applied the new layout.
+    requestAnimationFrame(() => {
+      phaserGame?.scale.refresh();
+    });
+  }
 }
 toggleBook?.addEventListener("click", () => showBook(!bookOpen));
 renderEncyclopedia();
@@ -199,7 +208,7 @@ class ForestScene extends Phaser.Scene {
   }
 }
 
-new Phaser.Game({
+phaserGame = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
   width: MAP_WIDTH * TILE_SIZE,
