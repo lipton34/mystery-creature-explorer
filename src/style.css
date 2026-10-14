@@ -2,11 +2,12 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-height: 100dvh; }
 #app { display: flex; flex-direction: column; align-items: center; min-height: 100dvh; padding: 16px 10px; gap: 10px; }
-header { width: min(100%, 760px); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+header { width: min(100%, 760px); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
 h1 { font-size: clamp(18px, 4vw, 25px); margin: 0; }
 p { margin: 0; }
 button { cursor: pointer; border: 0; border-radius: 12px; background: #e8c681; color: #2b302b; font: inherit; font-weight: 700; padding: 10px 16px; }
 button:focus-visible { outline: 3px solid white; outline-offset: 2px; }
+.header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 #game { width: min(100%, 760px); overflow: hidden; border: 3px solid #567b6d; border-radius: 14px; background: #1b3530; }
 #game canvas { display: block; width: 100%; height: auto; }
 #message { width: min(100%, 760px); min-height: 42px; text-align: center; line-height: 1.6; color: #f9e5b5; }
@@ -17,3 +18,14 @@ button:focus-visible { outline: 3px solid white; outline-offset: 2px; }
 #controls [data-direction="down"] { grid-column: 2; grid-row: 2; }
 #controls [data-direction="right"] { grid-column: 3; grid-row: 2; }
 footer { color: #aec3ba; font-size: 12px; text-align: center; }
+#encyclopedia { width: min(100%, 760px); background: #25483f; padding: 20px; border: 2px solid #82aa81; border-radius: 16px; }
+#encyclopedia[hidden], #game[hidden], #controls[hidden] { display: none; }
+.book-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 14px; }
+.book-heading h2 { margin: 0; font-size: 22px; }
+#collection-count { color: #f7df9b; }
+#encyclopedia-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(175px,1fr)); gap: 12px; }
+.creature-card { background: #f1eed5; border-radius: 14px; color: #344a3b; padding: 18px 12px; min-height: 180px; text-align: center; }
+.creature-card.unknown { background: #76908a; color: #eff6eb; }
+.creature-icon { font-size: 54px; line-height: 1.4; }
+.creature-card h3 { margin: 6px 0 8px; }
+.creature-card p { font-size: 13px; line-height: 1.6; }
