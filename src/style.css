@@ -8,7 +8,8 @@ p { margin: 0; }
 button { cursor: pointer; border: 0; border-radius: 12px; background: #e8c681; color: #2b302b; font: inherit; font-weight: 700; padding: 10px 16px; }
 button:focus-visible { outline: 3px solid white; outline-offset: 2px; }
 .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-#game { width: min(100%, 760px); overflow: hidden; border: 3px solid #567b6d; border-radius: 14px; background: #1b3530; }
+#stage { width: min(100%, 760px); position: relative; min-width: 0; }
+#game { width: 100%; overflow: hidden; border: 3px solid #567b6d; border-radius: 14px; background: #1b3530; }
 #game canvas { display: block; width: 100%; height: auto; }
 #message { width: min(100%, 760px); min-height: 42px; text-align: center; line-height: 1.6; color: #f9e5b5; }
 #controls { display: grid; grid-template-columns: repeat(3, 54px); grid-template-rows: repeat(2, 48px); gap: 5px; touch-action: none; }
@@ -18,8 +19,8 @@ button:focus-visible { outline: 3px solid white; outline-offset: 2px; }
 #controls [data-direction="down"] { grid-column: 2; grid-row: 2; }
 #controls [data-direction="right"] { grid-column: 3; grid-row: 2; }
 footer { color: #aec3ba; font-size: 12px; text-align: center; }
-#encyclopedia { width: min(100%, 760px); background: #25483f; padding: 20px; border: 2px solid #82aa81; border-radius: 16px; }
-#encyclopedia[hidden], #game[hidden], #controls[hidden] { display: none; }
+#encyclopedia { position: absolute; inset: 0; width: 100%; overflow-y: auto; background: #25483f; padding: 20px; border: 2px solid #82aa81; border-radius: 16px; }
+#encyclopedia[hidden], #controls[hidden] { display: none; }
 .book-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 14px; }
 .book-heading h2 { margin: 0; font-size: 22px; }
 #collection-count { color: #f7df9b; }
