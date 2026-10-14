@@ -1,8 +1,11 @@
+import { CREATURES, type CreatureId } from "./creatures";
+
 export const MAP_WIDTH = 16;
 export const MAP_HEIGHT = 11;
 export const TILE_SIZE = 40;
 export type Point = { x: number; y: number };
-export type World = { tiles: number[][]; player: Point; creature: Point };
+export type Encounter = { id: CreatureId; position: Point; discovered: boolean };
+export type World = { tiles: number[][]; player: Point; encounters: Encounter[] };
 
 export function createWorld(): World {
   const tiles = Array.from({ length: MAP_HEIGHT }, (_, y) =>
@@ -10,11 +13,22 @@ export function createWorld(): World {
       x === 0 || y === 0 || x === MAP_WIDTH - 1 || y === MAP_HEIGHT - 1 ? 1 : 0,
     ),
   );
-  // 通路が成立するよう、まずは障害物なしのシンプルな部屋。
-  // 装飾だけをランダムに変えて、移動不能なマップを生成しない。
   const player = { x: 2, y: 2 };
-  const creature = { x: 5 + Math.floor(Math.random() * 9), y: 2 + Math.floor(Math.random() * 7) };
-  return { tiles, player, creature };
+  // Every creature appears once per forest, at non-overlapping positions.
+  const spaces: Point[] = [];
+  for (let y = 2; y < MAP_HEIGHT - 1; y++) {
+    for (let x = 4; x < MAP_WIDTH - 1; x++) spaces.push({ x, y });
+  }
+  for (let i = spaces.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [spaces[i], spaces[j]] = [spaces[j], spaces[i]];
+  }
+  const encounters = CREATURES.map((creature, index) => ({
+    id: creature.id,
+    position: spaces[index],
+    discovered: false,
+  }));
+  return { tiles, player, encounters };
 }
 
 export function isWalkable(world: World, position: Point): boolean {
