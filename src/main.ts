@@ -2,8 +2,9 @@ import Phaser from "phaser";
 import "./style.css";
 import { createWorld, isSameTile, isWalkable, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Point, type World } from "./world";
 import { loadCollection, recordDiscovery } from "./collection";
-import { CREATURES, findCreature, type CreatureDefinition } from "./creatures";
+import { CREATURES, findCreature } from "./creatures";
 import { renderEncyclopedia } from "./encyclopedia";
+import { drawAnimatedCreature, drawDiscoverySparkles } from "./visuals";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app is missing");
@@ -66,6 +67,8 @@ class ForestScene extends Phaser.Scene {
   private keyHandler?: (event: KeyboardEvent) => void;
   private heldDirection: Direction | null = null;
   private lastMoveAt = 0;
+  private lastFrameAt = 0;
+  private sparkle?: { position: Point; startMs: number };
 
   constructor() { super("Forest"); }
 
@@ -109,6 +112,10 @@ class ForestScene extends Phaser.Scene {
   }
 
   update(time: number): void {
+    if (time - this.lastFrameAt >= 50 && !bookOpen) {
+      this.lastFrameAt = time;
+      this.renderWorld();
+    }
     if (this.heldDirection && !bookOpen && time - this.lastMoveAt >= 160) {
       this.lastMoveAt = time;
       this.move(this.heldDirection);
@@ -118,6 +125,7 @@ class ForestScene extends Phaser.Scene {
   private newForest(): void {
     this.world = createWorld();
     this.heldDirection = null;
+    this.sparkle = undefined;
     const found = loadCollection().length;
     say(found ? `新しい森に到着！ 図鑑は ${found}/${CREATURES.length} しゅるい はっけんずみ。` : "ふしぎな森へようこそ！ 生き物たちを探そう。");
     this.renderWorld();
@@ -135,31 +143,10 @@ class ForestScene extends Phaser.Scene {
       const creature = findCreature(encounter.id);
       if (!creature) continue;
       const isNew = recordDiscovery(creature.id);
+      this.sparkle = { position: { ...encounter.position }, startMs: this.time.now };
       say(isNew ? `✨ はじめまして、${creature.name}！ ずかんに とうろくしたよ！` : `🌟 ${creature.name}に あえた！ （ずかん とうろくずみ）`);
     }
     this.renderWorld();
-  }
-
-  private drawCreature(creature: CreatureDefinition, point: Point, discovered: boolean): void {
-    const g = this.graphics;
-    const x = point.x * TILE_SIZE;
-    const y = point.y * TILE_SIZE;
-    g.fillStyle(0x294c3b);
-    g.fillEllipse(x + 20, y + 33, 27, 8);
-    g.fillStyle(discovered ? 0xc6e4ba : creature.color);
-    g.fillEllipse(x + 20, y + 22, 27, 25);
-    g.fillStyle(creature.accent);
-    if (creature.id === "pufflet") {
-      g.fillCircle(x + 9, y + 13, 7);
-      g.fillCircle(x + 31, y + 13, 7);
-    } else if (creature.id === "glimmer") {
-      g.fillTriangle(x + 20, y + 6, x + 13, y + 17, x + 27, y + 17);
-    } else {
-      g.fillEllipse(x + 20, y + 10, 13, 7);
-    }
-    g.fillStyle(0x26352d);
-    g.fillCircle(x + 14, y + 21, 2);
-    g.fillCircle(x + 26, y + 21, 2);
   }
 
   private renderWorld(): void {
@@ -184,7 +171,7 @@ class ForestScene extends Phaser.Scene {
     }
     for (const encounter of this.world.encounters) {
       const creature = findCreature(encounter.id);
-      if (creature) this.drawCreature(creature, encounter.position, encounter.discovered);
+      if (creature) drawAnimatedCreature(g, creature, encounter.position, this.time.now / 1000);
     }
     const p = this.world.player;
     g.fillStyle(0x213c3f);
@@ -198,6 +185,11 @@ class ForestScene extends Phaser.Scene {
     g.fillStyle(0x292c2b);
     g.fillCircle(p.x * TILE_SIZE + 16, p.y * TILE_SIZE + 19, 1.5);
     g.fillCircle(p.x * TILE_SIZE + 24, p.y * TILE_SIZE + 19, 1.5);
+    if (this.sparkle) {
+      const elapsed = this.time.now - this.sparkle.startMs;
+      if (elapsed < 1050) drawDiscoverySparkles(g, this.sparkle.position, elapsed);
+      else this.sparkle = undefined;
+    }
   }
 }
 
