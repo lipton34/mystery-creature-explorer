@@ -15,11 +15,13 @@ app.innerHTML = `
       <button id="reset" type="button">別の森へ ↻</button>
     </div>
   </header>
+  <main id="stage">
   <div id="game" aria-label="探索ゲーム"></div>
   <section id="encyclopedia" aria-label="生き物図鑑" hidden>
     <div class="book-heading"><h2>📖 いきものずかん</h2><span id="collection-count"></span></div>
     <div id="encyclopedia-grid"></div>
   </section>
+  </main>
   <p id="message" role="status" aria-live="polite">森を歩いて、ふしぎな生き物を見つけよう！</p>
   <div id="controls" aria-label="移動操作">
     <button data-direction="up" aria-label="上へ">▲</button>
@@ -32,31 +34,22 @@ app.innerHTML = `
 
 const message = document.querySelector<HTMLElement>("#message");
 const book = document.querySelector<HTMLElement>("#encyclopedia");
-const game = document.querySelector<HTMLElement>("#game");
 const controls = document.querySelector<HTMLElement>("#controls");
 const toggleBook = document.querySelector<HTMLButtonElement>("#toggle-book");
 let bookOpen = false;
-let phaserGame: Phaser.Game | undefined;
 
 function say(text: string): void { if (message) message.textContent = text; }
 function showBook(open: boolean): void {
   bookOpen = open;
   if (book) book.hidden = !open;
-  if (game) game.hidden = open;
   if (controls) controls.hidden = open;
   if (toggleBook) {
     toggleBook.textContent = open ? "🌲 もりにもどる" : "📖 ずかんをみる";
     toggleBook.setAttribute("aria-expanded", String(open));
   }
-  if (open) {
-    renderEncyclopedia();
-  } else {
-    // A hidden Phaser parent has zero size. Recalculate FIT after restoring it.
-    // Waiting for the next frame ensures the browser has applied the new layout.
-    requestAnimationFrame(() => {
-      phaserGame?.scale.refresh();
-    });
-  }
+  // Keep Phaser's canvas mounted and its parent measurable at all times.
+  // The encyclopedia covers it as an overlay instead of collapsing its layout.
+  if (open) renderEncyclopedia();
 }
 toggleBook?.addEventListener("click", () => showBook(!bookOpen));
 renderEncyclopedia();
@@ -208,7 +201,7 @@ class ForestScene extends Phaser.Scene {
   }
 }
 
-phaserGame = new Phaser.Game({
+new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
   width: MAP_WIDTH * TILE_SIZE,
