@@ -109,6 +109,6 @@ export function isWalkable(world: World, position: Point): boolean {
   return world.tiles[position.y]?.[position.x] === 0;
 }
 
-export function isNear(a: Point, b: Point): boolean {
-  return distance(a, b) <= 1;
+export function isSameTile(a: Point, b: Point): boolean {
+  return a.x === b.x && a.y === b.y;
 }
