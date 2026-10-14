@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CREATURES } from "./creatures";
-import { createWorld, isWalkable, MAP_HEIGHT, MAP_WIDTH, type Point } from "./world";
+import { createWorld, isSameTile, isWalkable, MAP_HEIGHT, MAP_WIDTH, type Point } from "./world";
 
 function seededRandom(seed: number): () => number {
   let state = seed >>> 0;
@@ -27,6 +27,12 @@ function reachable(world: ReturnType<typeof createWorld>): Set<string> {
 }
 
 describe("random forest layout", () => {
+  it("discovers only when standing on the same tile", () => {
+    expect(isSameTile({ x: 5, y: 4 }, { x: 5, y: 4 })).toBe(true);
+    expect(isSameTile({ x: 5, y: 4 }, { x: 5, y: 5 })).toBe(false);
+    expect(isSameTile({ x: 5, y: 4 }, { x: 4, y: 4 })).toBe(false);
+  });
+
   it("keeps all floors connected, creatures reachable, and the border closed", () => {
     for (let seed = 0; seed < 300; seed++) {
       const world = createWorld(seededRandom(seed));
