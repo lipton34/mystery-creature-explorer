@@ -29,6 +29,7 @@ app.innerHTML = `
     <h2>いきもののおうち</h2>
     <p>みつけた なかまたちが まっているよ！</p>
     <div id="home-creatures" class="home-creatures"></div>
+    <p id="home-reaction" role="status" aria-live="polite">なかまを タップしてみよう！</p>
     <button id="start-expedition" type="button">🌲 あたらしい森へ！</button>
   </section>
   </main>
@@ -60,19 +61,43 @@ const homeButton = document.querySelector<HTMLButtonElement>("#go-home");
 const resetButton = document.querySelector<HTMLButtonElement>("#reset");
 const progressLabel = document.querySelector<HTMLElement>("#expedition-status");
 const clearBanner = document.querySelector<HTMLElement>("#clear-banner");
+const homeReaction = document.querySelector<HTMLElement>("#home-reaction");
+const reactionIndex = new Map<string, number>();
+const reactions: Record<string, readonly string[]> = {
+  mossling: ["こけまるは にっこり わらった！", "こけまるは うれしそうに はねた！"],
+  pufflet: ["ふわりんは ふわっと うかんだ！", "ふわりんは くるくる まわった！"],
+  glimmer: ["きらぽんは きらきら ひかった！", "きらぽんは うれしそうに またたいた！"],
+};
 function renderHome(): void {
   const grid = document.querySelector<HTMLElement>("#home-creatures");
   if (!grid) return;
   grid.replaceChildren();
   const found = new Set(loadCollection());
   for (const creature of CREATURES) {
-    const tile = document.createElement("div");
-    tile.className = "home-creature" + (found.has(creature.id) ? "" : " home-unknown");
+    const unlocked = found.has(creature.id);
+    const tile = document.createElement(unlocked ? "button" : "div");
+    tile.className = "home-creature" + (unlocked ? " home-friend" : " home-unknown");
+    if (unlocked) {
+      const button = tile as HTMLButtonElement;
+      button.type = "button";
+      button.setAttribute("aria-label", creature.name + "と あそぶ");
+      button.addEventListener("click", () => {
+        const options = reactions[creature.id] ?? [creature.name + "は うれしそう！"];
+        const index = reactionIndex.get(creature.id) ?? 0;
+        if (homeReaction) homeReaction.textContent = options[index % options.length];
+        reactionIndex.set(creature.id, index + 1);
+        // Restart the brief bounce animation after every interaction.
+        button.classList.remove("is-reacting");
+        void button.offsetWidth;
+        button.classList.add("is-reacting");
+      });
+      button.addEventListener("animationend", () => button.classList.remove("is-reacting"));
+    }
     const icon = document.createElement("span");
-    icon.textContent = found.has(creature.id) ? creature.icon : "？";
+    icon.textContent = unlocked ? creature.icon : "？";
     icon.className = "home-creature-icon";
     const label = document.createElement("span");
-    label.textContent = found.has(creature.id) ? creature.name : "まだ いないよ";
+    label.textContent = unlocked ? creature.name : "まだ いないよ";
     tile.append(icon, label);
     grid.append(tile);
   }
@@ -87,6 +112,7 @@ function showHome(open: boolean): void {
   if (clearBanner) clearBanner.hidden = open || !clearBanner.dataset.completed;
   if (open) {
     renderHome();
+    if (homeReaction) homeReaction.textContent = "なかまを タップしてみよう！";
     say("あたらしい森を たんけんするときは ボタンを おしてね！");
   }
 }

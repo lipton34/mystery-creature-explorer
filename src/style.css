@@ -45,3 +45,19 @@ footer { color: #aec3ba; font-size: 12px; text-align: center; }
 #clear-banner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; width: min(100%, 760px); padding: 12px; border-radius: 14px; background: #fbe5a6; color: #54451c; }
 #clear-banner strong { font-size: clamp(14px, 3.5vw, 21px); }
 #clear-banner span { font-size: 13px; }
+
+/* v0.6: Tappable, unlocked friends in the home. */
+.home-friend { border: 0; cursor: pointer; font: inherit; padding: 8px; transition: transform 120ms ease, background 120ms ease; }
+.home-friend:hover { background: #fff5dc; transform: translateY(-3px); }
+.home-friend:focus-visible { outline: 3px solid #ffe096; outline-offset: 3px; }
+.home-friend:active { transform: scale(0.95); }
+.home-friend.is-reacting .home-creature-icon { animation: friend-bounce 480ms ease-out; }
+#home-reaction { min-height: 2em; font-weight: 700; color: #fbe5a6; }
+@keyframes friend-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  35% { transform: translateY(-14px) scale(1.13); }
+  65% { transform: translateY(0) scale(0.94); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-friend, .home-friend.is-reacting .home-creature-icon { transition: none; animation: none; }
+}
