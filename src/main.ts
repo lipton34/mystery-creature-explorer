@@ -6,6 +6,7 @@ import { CREATURES, findCreature } from "./creatures";
 import { renderEncyclopedia } from "./encyclopedia";
 import { drawAnimatedCreature, drawDiscoverySparkles } from "./visuals";
 import { expeditionProgress, isExpeditionComplete } from "./expedition";
+import { interactionMessage } from "./home-interactions";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app is missing");
@@ -29,6 +30,7 @@ app.innerHTML = `
     <h2>いきもののおうち</h2>
     <p>みつけた なかまたちが まっているよ！</p>
     <div id="home-creatures" class="home-creatures"></div>
+    <p id="home-reaction" role="status" aria-live="polite">なかまを タップしてみよう！</p>
     <button id="start-expedition" type="button">🌲 あたらしい森へ！</button>
   </section>
   </main>
@@ -65,14 +67,28 @@ function renderHome(): void {
   if (!grid) return;
   grid.replaceChildren();
   const found = new Set(loadCollection());
+  const reaction = document.querySelector<HTMLElement>("#home-reaction");
+  if (reaction) reaction.textContent = "なかまを タップしてみよう！";
   for (const creature of CREATURES) {
-    const tile = document.createElement("div");
-    tile.className = "home-creature" + (found.has(creature.id) ? "" : " home-unknown");
+    const isFound = found.has(creature.id);
+    const tile = document.createElement(isFound ? "button" : "div");
+    tile.className = "home-creature" + (isFound ? " home-interactive" : " home-unknown");
+    if (isFound) {
+      tile.setAttribute("type", "button");
+      tile.setAttribute("aria-label", `${creature.name}とあそぶ`);
+      tile.addEventListener("click", () => {
+        if (reaction) reaction.textContent = interactionMessage(creature.id);
+        tile.classList.remove("home-cheer");
+        // Force animation to replay on repeated clicks.
+        void tile.offsetWidth;
+        tile.classList.add("home-cheer");
+      });
+    }
     const icon = document.createElement("span");
-    icon.textContent = found.has(creature.id) ? creature.icon : "？";
+    icon.textContent = isFound ? creature.icon : "？";
     icon.className = "home-creature-icon";
     const label = document.createElement("span");
-    label.textContent = found.has(creature.id) ? creature.name : "まだ いないよ";
+    label.textContent = isFound ? creature.name : "まだ いないよ";
     tile.append(icon, label);
     grid.append(tile);
   }
@@ -115,7 +131,7 @@ function showBook(open: boolean): void {
   if (progressLabel) progressLabel.hidden = open || homeOpen;
   if (clearBanner) clearBanner.hidden = open || homeOpen || !clearBanner.dataset.completed;
   if (toggleBook) {
-    toggleBook.textContent = open ? "🌲 もりにもどる" : "📖 ずかんをみる";
+    toggleBook.textContent = open ? (resumeHomeAfterBook ? "🏠 おうちにもどる" : "🌲 もりにもどる") : "📖 ずかんをみる";
     toggleBook.setAttribute("aria-expanded", String(open));
   }
   // Keep Phaser's canvas mounted and its parent measurable at all times.
@@ -167,7 +183,7 @@ class ForestScene extends Phaser.Scene {
     document.querySelectorAll<HTMLButtonElement>("[data-direction]").forEach((button) => {
       const dir = button.dataset.direction as Direction;
       const start = (event: PointerEvent) => {
-        if (bookOpen) return;
+        if (bookOpen || homeOpen) return;
         event.preventDefault();
         button.setPointerCapture(event.pointerId);
         this.heldDirection = dir;
