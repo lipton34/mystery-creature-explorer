@@ -5,7 +5,8 @@ export const MAP_HEIGHT = 11;
 export const TILE_SIZE = 40;
 export const ENCOUNTERS_PER_EXPEDITION = 3;
 export type Point = { x: number; y: number };
-export type Encounter = { id: CreatureId; position: Point; discovered: boolean; hidden?: boolean };
+export type SearchSpotKind = "bush" | "stump" | "rock";
+export type Encounter = { id: CreatureId; position: Point; discovered: boolean; hidden?: boolean; spot?: SearchSpotKind };
 export type World = { tiles: number[][]; player: Point; encounters: Encounter[] };
 type Room = { x: number; y: number; width: number; height: number; center: Point };
 const DIRECTIONS: readonly Point[] = [
@@ -111,6 +112,7 @@ export function createWorld(random: () => number = Math.random): World {
     position: selected[index] ?? player,
     discovered: false,
     hidden: index === 0,
+    spot: index === 0 ? (["bush", "stump", "rock"] as const)[randomInt(0, 2, random)] : undefined,
   }));
   return { tiles, player, encounters };
 }
@@ -136,4 +138,9 @@ export function hiddenEncounterNear(world: World, position: Point): Encounter | 
     !encounter.discovered && encounter.hidden &&
     Math.abs(position.x - encounter.position.x) + Math.abs(position.y - encounter.position.y) <= 1,
   );
+}
+
+/** A friendly hint when the player is close enough to investigate. */
+export function nearbySearchSpot(world: World, position: Point): SearchSpotKind | undefined {
+  return hiddenEncounterNear(world, position)?.spot;
 }
