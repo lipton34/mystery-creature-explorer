@@ -25,11 +25,13 @@ app.innerHTML = `
     <p id="explore-tip" aria-live="polite">森をたんけんしてみよう！</p>
   </aside>
   <section id="encyclopedia" aria-label="生き物図鑑" hidden>
+    <div class="book-emblem" aria-hidden="true">📚</div>
     <div class="book-heading"><h2>📖 いきものずかん</h2><span id="collection-count"></span></div>
     <div id="encyclopedia-grid"></div>
   </section>
   <section id="home" class="overlay-panel" aria-label="生き物のおうち">
-    <div class="home-hero">🏡</div>
+    <div class="home-hero" aria-hidden="true">🏡</div>
+    <div class="home-decor" aria-hidden="true">🪴　🪟　🪴</div>
     <h2>いきもののおうち</h2>
     <p>みつけた なかまたちが まっているよ！</p>
     <div id="home-creatures" class="home-creatures"></div>
@@ -109,6 +111,10 @@ const reactions: Record<string, readonly string[]> = {
   droplet: ["しずくんは ぷるぷる ゆれた！", "しずくんは ぴょんと はねた！"],
   acorn: ["どんぐりんは くるんと まわった！", "どんぐりんは ぼうしを ふった！"],
 };
+function updateScreenTheme(): void {
+  if (!app) return;
+  app.dataset.screen = bookOpen ? "book" : homeOpen ? "home" : "forest";
+}
 function renderHome(): void {
   const grid = document.querySelector<HTMLElement>("#home-creatures");
   if (!grid) return;
@@ -155,6 +161,7 @@ function showHome(open: boolean): void {
     }
   }
   homeOpen = open;
+  updateScreenTheme();
   if (home) home.hidden = !open;
   if (controls) controls.hidden = open || bookOpen;
   if (homeButton) homeButton.hidden = open;
@@ -188,6 +195,7 @@ function showBook(open: boolean): void {
     renderHome();
     resumeHomeAfterBook = false;
   }
+  updateScreenTheme();
   if (book) book.hidden = !open;
   if (controls) controls.hidden = open || homeOpen;
   // While viewing the book, keep "おうちへ" available as a direct destination.
