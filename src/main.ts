@@ -11,7 +11,7 @@ const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app is missing");
 app.innerHTML = `
   <header>
-    <h1>🌿 ふしぎな迷宮図鑑</h1>
+    <h1>🌿 ふしぎな迷宮図鑑 <small class="version-label">v1.0</small></h1>
     <div class="header-actions">
       <button id="toggle-book" type="button" aria-expanded="false" aria-controls="encyclopedia">📖 ずかんをみる</button>
       <button id="go-home" type="button">🏠 おうちへ</button>
@@ -33,8 +33,15 @@ app.innerHTML = `
     <button id="start-expedition" type="button">🌲 あたらしい森へ！</button>
   </section>
   </main>
-  <p id="expedition-status"></p>
-  <button id="inspect" type="button">🔎 しらべる</button>
+  <section id="expedition-hud" aria-label="探索の進みぐあい">
+    <p id="expedition-status" aria-live="polite"></p>
+    <p id="explore-tip">いきものは おなじマスで はっけん。あやしい ばしょは しらべよう！</p>
+  </section>
+  <div id="discovery-banner" role="status" aria-live="polite" hidden>
+    <span id="discovery-icon" aria-hidden="true">✨</span>
+    <div><strong id="discovery-heading"></strong><p id="discovery-detail"></p></div>
+  </div>
+  <button id="inspect" type="button" aria-label="まわりをしらべる">🔎 しらべる</button>
   <div id="clear-banner" role="status" aria-live="polite" hidden>
     <strong>🎉 この森の いきものを ぜんぶ みつけた！ 🎉</strong>
     <span>おめでとう！ いつでも おうちに かえれるよ！</span>
@@ -46,7 +53,7 @@ app.innerHTML = `
     <button data-direction="down" aria-label="下へ">▼</button>
     <button data-direction="right" aria-label="右へ">▶</button>
   </div>
-  <footer>矢印キー / WASD / 画面のボタンで移動 · 発見した生き物はこのブラウザに記録されます</footer>
+  <footer>パソコン：矢印キー・WASDで移動 / スペースで調べる。スマホ：画面のボタンで操作。はっけんは自動で記録されます。</footer>
 `;
 
 const message = document.querySelector<HTMLElement>("#message");
@@ -61,6 +68,12 @@ const home = document.querySelector<HTMLElement>("#home");
 const homeButton = document.querySelector<HTMLButtonElement>("#go-home");
 const resetButton = document.querySelector<HTMLButtonElement>("#reset");
 const progressLabel = document.querySelector<HTMLElement>("#expedition-status");
+const expeditionHud = document.querySelector<HTMLElement>("#expedition-hud");
+const exploreTip = document.querySelector<HTMLElement>("#explore-tip");
+const discoveryBanner = document.querySelector<HTMLElement>("#discovery-banner");
+const discoveryIcon = document.querySelector<HTMLElement>("#discovery-icon");
+const discoveryHeading = document.querySelector<HTMLElement>("#discovery-heading");
+const discoveryDetail = document.querySelector<HTMLElement>("#discovery-detail");
 const inspectButton = document.querySelector<HTMLButtonElement>("#inspect");
 const clearBanner = document.querySelector<HTMLElement>("#clear-banner");
 const homeReaction = document.querySelector<HTMLElement>("#home-reaction");
@@ -112,7 +125,9 @@ function showHome(open: boolean): void {
   if (controls) controls.hidden = open || bookOpen;
   if (homeButton) homeButton.hidden = open;
   if (resetButton) resetButton.hidden = open;
+  if (expeditionHud) expeditionHud.hidden = open;
   if (progressLabel) progressLabel.hidden = open;
+  if (discoveryBanner) discoveryBanner.hidden = true;
   if (inspectButton) inspectButton.hidden = open;
   if (clearBanner) clearBanner.hidden = open || !clearBanner.dataset.completed;
   if (open) {
@@ -143,7 +158,9 @@ function showBook(open: boolean): void {
   if (controls) controls.hidden = open || homeOpen;
   if (homeButton) homeButton.hidden = open || homeOpen;
   if (resetButton) resetButton.hidden = open || homeOpen;
+  if (expeditionHud) expeditionHud.hidden = open || homeOpen;
   if (progressLabel) progressLabel.hidden = open || homeOpen;
+  if (discoveryBanner && (open || homeOpen)) discoveryBanner.hidden = true;
   if (inspectButton) inspectButton.hidden = open || homeOpen;
   if (clearBanner) clearBanner.hidden = open || homeOpen || !clearBanner.dataset.completed;
   if (toggleBook) {
@@ -172,6 +189,7 @@ class ForestScene extends Phaser.Scene {
   private lastMoveAt = 0;
   private lastFrameAt = 0;
   private sparkle?: { position: Point; startMs: number };
+  private discoveryHideEvent?: Phaser.Time.TimerEvent;
 
   constructor() { super("Forest"); }
 
@@ -182,7 +200,8 @@ class ForestScene extends Phaser.Scene {
     startNewExpedition = () => this.newForest();
     this.keyHandler = (event: KeyboardEvent) => {
       if (bookOpen || homeOpen) return;
-      if (event.key === " " || event.key === "Enter") {
+      if (event.target instanceof HTMLElement && event.target.closest("button, input, textarea, select")) return;
+      if (event.key === " ") {
         event.preventDefault();
         if (!event.repeat) this.inspect();
         return;
@@ -200,7 +219,9 @@ class ForestScene extends Phaser.Scene {
     window.addEventListener("keydown", this.keyHandler);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       if (this.keyHandler) window.removeEventListener("keydown", this.keyHandler);
+      this.discoveryHideEvent?.remove();
     });
+    window.addEventListener("blur", () => { this.heldDirection = null; });
 
     document.querySelector("#reset")?.addEventListener("click", () => this.newForest());
     document.querySelectorAll<HTMLButtonElement>("[data-direction]").forEach((button) => {
@@ -236,6 +257,8 @@ class ForestScene extends Phaser.Scene {
     this.world = createWorld();
     this.heldDirection = null;
     this.sparkle = undefined;
+    this.discoveryHideEvent?.remove();
+    if (discoveryBanner) discoveryBanner.hidden = true;
     if (clearBanner) { delete clearBanner.dataset.completed; clearBanner.hidden = true; }
     this.updateExpeditionProgress();
     const found = loadCollection().length;
@@ -271,6 +294,14 @@ class ForestScene extends Phaser.Scene {
     const creature = findCreature(encounter.id);
     if (!creature) return;
     const isNew = recordDiscovery(creature.id);
+    if (discoveryIcon) discoveryIcon.textContent = creature.icon;
+    if (discoveryHeading) discoveryHeading.textContent = isNew ? `はじめまして！ ${creature.name}` : `${creature.name}に またあえた！`;
+    if (discoveryDetail) discoveryDetail.textContent = isNew ? "🎉 ずかんに あたらしく とうろくしたよ！" : "🌟 こんかいの森でも はっけん！";
+    if (discoveryBanner) discoveryBanner.hidden = false;
+    this.discoveryHideEvent?.remove();
+    this.discoveryHideEvent = this.time.delayedCall(2800, () => {
+      if (discoveryBanner) discoveryBanner.hidden = true;
+    });
     this.sparkle = { position: { ...encounter.position }, startMs: this.time.now };
     this.updateExpeditionProgress();
     if (isExpeditionComplete(this.world.encounters) && clearBanner) {
@@ -283,7 +314,12 @@ class ForestScene extends Phaser.Scene {
   private updateExpeditionProgress(): void {
     const { found, total } = expeditionProgress(this.world.encounters);
     const spot = nearbySearchSpot(this.world, this.world.player);
-    if (progressLabel) progressLabel.textContent = `🌿 この森で ${found} / ${total} しゅるい はっけん` + (spot ? ` · 🔎 ${SPOT_LABELS[spot]}を しらべられるよ！` : " · 🔎 あやしい ばしょを さがそう");
+    if (progressLabel) progressLabel.textContent = `🌿 この森で ${found} / ${total} しゅるい はっけん`;
+    if (exploreTip) exploreTip.textContent = spot ? `🔎 ${SPOT_LABELS[spot]}を しらべてみよう！` : "あやしい ばしょを さがそう！";
+    if (inspectButton) {
+      inspectButton.classList.toggle("inspect-ready", Boolean(spot));
+      inspectButton.textContent = spot ? `🔎 ${SPOT_LABELS[spot]}を しらべる！` : "🔎 しらべる";
+    }
   }
 
   private renderWorld(): void {
