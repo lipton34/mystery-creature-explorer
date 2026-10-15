@@ -95,3 +95,64 @@ footer { width: min(100%, 760px); line-height: 1.6; }
 @media (prefers-reduced-motion: reduce) {
   #inspect { transition: none; transform: none; }
 }
+
+/* v1.0 review updates: map-corner guidance and center-screen celebration. */
+#stage > #expedition-hud {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 3;
+  width: min(45%, 235px);
+  min-height: 96px;
+  padding: 10px 12px;
+  background: rgba(20, 49, 45, .93);
+  color: #fff4d2;
+  border: 2px solid #8ab89a;
+  border-radius: 12px;
+  pointer-events: none;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+}
+#stage > #expedition-hud[hidden] { display: none; }
+#stage > #expedition-hud #expedition-status { font-size: clamp(11px, 2.4vw, 15px); line-height: 1.3; }
+#stage > #expedition-hud #explore-tip { font-size: clamp(11px, 2.1vw, 13px); line-height: 1.4; }
+#inspect:disabled {
+  background: #667e73;
+  color: #dce5d8;
+  opacity: .7;
+  cursor: not-allowed;
+  transform: none;
+}
+#inspect.inspect-ready:not(:disabled) { background: #ffe5a2; opacity: 1; }
+.announcement {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(12, 28, 30, .75);
+}
+.announcement[hidden] { display: none; }
+.announcement-card {
+  width: min(100%, 520px);
+  background: #fff0bd;
+  color: #493c28;
+  border: 5px solid #eccb79;
+  border-radius: 24px;
+  padding: clamp(20px, 6vw, 38px);
+  text-align: center;
+  box-shadow: 0 14px 45px rgba(0, 0, 0, .28);
+}
+.announcement-icon { font-size: clamp(56px, 14vw, 90px); display: block; }
+#announcement-heading { margin: 10px 0; font-size: clamp(22px, 6vw, 34px); line-height: 1.4; }
+#announcement-detail { margin: 0 0 22px; font-size: clamp(15px, 3.4vw, 20px); }
+#announcement-close { min-height: 52px; padding-inline: 35px; background: #93c8a4; }
+@media (max-width: 480px) {
+  #stage > #expedition-hud { top: 5px; left: 5px; width: min(48%, 165px); min-height: 77px; padding: 6px 8px; }
+  #stage > #expedition-hud #expedition-status { font-size: 11px; }
+  #stage > #expedition-hud #explore-tip { font-size: 11px; }
+}
