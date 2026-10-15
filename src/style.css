@@ -19,8 +19,8 @@ button:focus-visible { outline: 3px solid white; outline-offset: 2px; }
 #controls [data-direction="down"] { grid-column: 2; grid-row: 2; }
 #controls [data-direction="right"] { grid-column: 3; grid-row: 2; }
 footer { color: #aec3ba; font-size: 12px; text-align: center; }
-#encyclopedia { position: absolute; inset: 0; width: 100%; overflow-y: auto; background: #25483f; padding: 20px; border: 2px solid #82aa81; border-radius: 16px; }
-#encyclopedia[hidden], #controls[hidden] { display: none; }
+#encyclopedia, #home { position: absolute; inset: 0; width: 100%; overflow-y: auto; background: #25483f; padding: 20px; border: 2px solid #82aa81; border-radius: 16px; }
+#encyclopedia[hidden], #home[hidden], #controls[hidden], .header-actions button[hidden], #clear-banner[hidden], #expedition-status[hidden] { display: none; }
 .book-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 14px; }
 .book-heading h2 { margin: 0; font-size: 22px; }
 #collection-count { color: #f7df9b; }
@@ -30,3 +30,18 @@ footer { color: #aec3ba; font-size: 12px; text-align: center; }
 .creature-icon { font-size: 54px; line-height: 1.4; }
 .creature-card h3 { margin: 6px 0 8px; }
 .creature-card p { font-size: 13px; line-height: 1.6; }
+
+#home { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 12px; }
+#home[hidden] { display: none; }
+#home h2 { margin: 0; font-size: clamp(20px, 5vw, 30px); }
+#home p { color: #e5f2d8; }
+.home-hero { font-size: 56px; }
+.home-creatures { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; width: 100%; }
+.home-creature { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 112px; min-height: 112px; border-radius: 14px; background: #f2edd7; color: #314d3d; font-size: 13px; font-weight: 700; }
+.home-creature-icon { font-size: 40px; }
+.home-unknown { background: #6c8980; color: #e7f1e9; }
+#start-expedition { margin-top: 10px; background: #f4d38b; }
+#expedition-status { width: min(100%, 760px); font-weight: 700; text-align: center; color: #e9e2a0; }
+#clear-banner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; width: min(100%, 760px); padding: 12px; border-radius: 14px; background: #fbe5a6; color: #54451c; }
+#clear-banner strong { font-size: clamp(14px, 3.5vw, 21px); }
+#clear-banner span { font-size: 13px; }

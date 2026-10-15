@@ -5,6 +5,7 @@ import { loadCollection, recordDiscovery } from "./collection";
 import { CREATURES, findCreature } from "./creatures";
 import { renderEncyclopedia } from "./encyclopedia";
 import { drawAnimatedCreature, drawDiscoverySparkles } from "./visuals";
+import { expeditionProgress, isExpeditionComplete } from "./expedition";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app is missing");
@@ -13,6 +14,7 @@ app.innerHTML = `
     <h1>🌿 ふしぎな迷宮図鑑</h1>
     <div class="header-actions">
       <button id="toggle-book" type="button" aria-expanded="false" aria-controls="encyclopedia">📖 ずかんをみる</button>
+      <button id="go-home" type="button">🏠 おうちへ</button>
       <button id="reset" type="button">別の森へ ↻</button>
     </div>
   </header>
@@ -22,7 +24,19 @@ app.innerHTML = `
     <div class="book-heading"><h2>📖 いきものずかん</h2><span id="collection-count"></span></div>
     <div id="encyclopedia-grid"></div>
   </section>
+  <section id="home" class="overlay-panel" aria-label="生き物のおうち" hidden>
+    <div class="home-hero">🏡</div>
+    <h2>いきもののおうち</h2>
+    <p>みつけた なかまたちが まっているよ！</p>
+    <div id="home-creatures" class="home-creatures"></div>
+    <button id="start-expedition" type="button">🌲 あたらしい森へ！</button>
+  </section>
   </main>
+  <p id="expedition-status"></p>
+  <div id="clear-banner" role="status" aria-live="polite" hidden>
+    <strong>🎉 この森の いきものを ぜんぶ みつけた！ 🎉</strong>
+    <span>おめでとう！ いつでも おうちに かえれるよ！</span>
+  </div>
   <p id="message" role="status" aria-live="polite">森を歩いて、ふしぎな生き物を見つけよう！</p>
   <div id="controls" aria-label="移動操作">
     <button data-direction="up" aria-label="上へ">▲</button>
@@ -38,12 +52,68 @@ const book = document.querySelector<HTMLElement>("#encyclopedia");
 const controls = document.querySelector<HTMLElement>("#controls");
 const toggleBook = document.querySelector<HTMLButtonElement>("#toggle-book");
 let bookOpen = false;
+let homeOpen = false;
+let resumeHomeAfterBook = false;
+let startNewExpedition: (() => void) | undefined;
+const home = document.querySelector<HTMLElement>("#home");
+const homeButton = document.querySelector<HTMLButtonElement>("#go-home");
+const resetButton = document.querySelector<HTMLButtonElement>("#reset");
+const progressLabel = document.querySelector<HTMLElement>("#expedition-status");
+const clearBanner = document.querySelector<HTMLElement>("#clear-banner");
+function renderHome(): void {
+  const grid = document.querySelector<HTMLElement>("#home-creatures");
+  if (!grid) return;
+  grid.replaceChildren();
+  const found = new Set(loadCollection());
+  for (const creature of CREATURES) {
+    const tile = document.createElement("div");
+    tile.className = "home-creature" + (found.has(creature.id) ? "" : " home-unknown");
+    const icon = document.createElement("span");
+    icon.textContent = found.has(creature.id) ? creature.icon : "？";
+    icon.className = "home-creature-icon";
+    const label = document.createElement("span");
+    label.textContent = found.has(creature.id) ? creature.name : "まだ いないよ";
+    tile.append(icon, label);
+    grid.append(tile);
+  }
+}
+function showHome(open: boolean): void {
+  homeOpen = open;
+  if (home) home.hidden = !open;
+  if (controls) controls.hidden = open || bookOpen;
+  if (homeButton) homeButton.hidden = open;
+  if (resetButton) resetButton.hidden = open;
+  if (progressLabel) progressLabel.hidden = open;
+  if (clearBanner) clearBanner.hidden = open || !clearBanner.dataset.completed;
+  if (open) {
+    renderHome();
+    say("あたらしい森を たんけんするときは ボタンを おしてね！");
+  }
+}
+homeButton?.addEventListener("click", () => showHome(true));
+document.querySelector("#start-expedition")?.addEventListener("click", () => {
+  startNewExpedition?.();
+  showHome(false);
+});
 
 function say(text: string): void { if (message) message.textContent = text; }
 function showBook(open: boolean): void {
   bookOpen = open;
+  if (open) {
+    resumeHomeAfterBook = homeOpen;
+    if (homeOpen) { homeOpen = false; if (home) home.hidden = true; }
+  } else if (resumeHomeAfterBook) {
+    homeOpen = true;
+    if (home) home.hidden = false;
+    renderHome();
+    resumeHomeAfterBook = false;
+  }
   if (book) book.hidden = !open;
-  if (controls) controls.hidden = open;
+  if (controls) controls.hidden = open || homeOpen;
+  if (homeButton) homeButton.hidden = open || homeOpen;
+  if (resetButton) resetButton.hidden = open || homeOpen;
+  if (progressLabel) progressLabel.hidden = open || homeOpen;
+  if (clearBanner) clearBanner.hidden = open || homeOpen || !clearBanner.dataset.completed;
   if (toggleBook) {
     toggleBook.textContent = open ? "🌲 もりにもどる" : "📖 ずかんをみる";
     toggleBook.setAttribute("aria-expanded", String(open));
@@ -75,8 +145,9 @@ class ForestScene extends Phaser.Scene {
   create(): void {
     this.graphics = this.add.graphics();
     this.newForest();
+    startNewExpedition = () => this.newForest();
     this.keyHandler = (event: KeyboardEvent) => {
-      if (bookOpen) return;
+      if (bookOpen || homeOpen) return;
       const map: Record<string, Direction> = {
         ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
         w: "up", a: "left", s: "down", d: "right",
@@ -112,11 +183,11 @@ class ForestScene extends Phaser.Scene {
   }
 
   update(time: number): void {
-    if (time - this.lastFrameAt >= 50 && !bookOpen) {
+    if (time - this.lastFrameAt >= 50 && !bookOpen && !homeOpen) {
       this.lastFrameAt = time;
       this.renderWorld();
     }
-    if (this.heldDirection && !bookOpen && time - this.lastMoveAt >= 160) {
+    if (this.heldDirection && !bookOpen && !homeOpen && time - this.lastMoveAt >= 160) {
       this.lastMoveAt = time;
       this.move(this.heldDirection);
     }
@@ -126,6 +197,8 @@ class ForestScene extends Phaser.Scene {
     this.world = createWorld();
     this.heldDirection = null;
     this.sparkle = undefined;
+    if (clearBanner) { delete clearBanner.dataset.completed; clearBanner.hidden = true; }
+    this.updateExpeditionProgress();
     const found = loadCollection().length;
     say(found ? `新しい森に到着！ 図鑑は ${found}/${CREATURES.length} しゅるい はっけんずみ。` : "ふしぎな森へようこそ！ 生き物たちを探そう。");
     this.renderWorld();
@@ -144,9 +217,19 @@ class ForestScene extends Phaser.Scene {
       if (!creature) continue;
       const isNew = recordDiscovery(creature.id);
       this.sparkle = { position: { ...encounter.position }, startMs: this.time.now };
+      this.updateExpeditionProgress();
+      if (isExpeditionComplete(this.world.encounters) && clearBanner) {
+        clearBanner.dataset.completed = "true";
+        clearBanner.hidden = false;
+      }
       say(isNew ? `✨ はじめまして、${creature.name}！ ずかんに とうろくしたよ！` : `🌟 ${creature.name}に あえた！ （ずかん とうろくずみ）`);
     }
     this.renderWorld();
+  }
+
+  private updateExpeditionProgress(): void {
+    const { found, total } = expeditionProgress(this.world.encounters);
+    if (progressLabel) progressLabel.textContent = `🌿 この森で ${found} / ${total} しゅるい はっけん`;
   }
 
   private renderWorld(): void {
