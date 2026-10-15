@@ -28,7 +28,7 @@ app.innerHTML = `
     <div class="book-heading"><h2>📖 いきものずかん</h2><span id="collection-count"></span></div>
     <div id="encyclopedia-grid"></div>
   </section>
-  <section id="home" class="overlay-panel" aria-label="生き物のおうち" hidden>
+  <section id="home" class="overlay-panel" aria-label="生き物のおうち">
     <div class="home-hero">🏡</div>
     <h2>いきもののおうち</h2>
     <p>みつけた なかまたちが まっているよ！</p>
@@ -61,7 +61,7 @@ const book = document.querySelector<HTMLElement>("#encyclopedia");
 const controls = document.querySelector<HTMLElement>("#controls");
 const toggleBook = document.querySelector<HTMLButtonElement>("#toggle-book");
 let bookOpen = false;
-let homeOpen = false;
+let homeOpen = true;
 let resumeHomeAfterBook = false;
 let startNewExpedition: (() => void) | undefined;
 const home = document.querySelector<HTMLElement>("#home");
@@ -144,6 +144,16 @@ function renderHome(): void {
   }
 }
 function showHome(open: boolean): void {
+  // The home button is also available from the encyclopedia.
+  if (open && bookOpen) {
+    bookOpen = false;
+    resumeHomeAfterBook = false;
+    if (book) book.hidden = true;
+    if (toggleBook) {
+      toggleBook.textContent = "📖 ずかんをみる";
+      toggleBook.setAttribute("aria-expanded", "false");
+    }
+  }
   homeOpen = open;
   if (home) home.hidden = !open;
   if (controls) controls.hidden = open || bookOpen;
@@ -180,7 +190,8 @@ function showBook(open: boolean): void {
   }
   if (book) book.hidden = !open;
   if (controls) controls.hidden = open || homeOpen;
-  if (homeButton) homeButton.hidden = open || homeOpen;
+  // While viewing the book, keep "おうちへ" available as a direct destination.
+  if (homeButton) homeButton.hidden = homeOpen;
   if (resetButton) resetButton.hidden = open || homeOpen;
   if (expeditionHud) expeditionHud.hidden = open || homeOpen;
   if (progressLabel) progressLabel.hidden = open || homeOpen;
@@ -188,7 +199,7 @@ function showBook(open: boolean): void {
   if (inspectButton) inspectButton.hidden = open || homeOpen;
 
   if (toggleBook) {
-    toggleBook.textContent = open ? "🌲 もりにもどる" : "📖 ずかんをみる";
+    toggleBook.textContent = open ? "↩ もどる" : "📖 ずかんをみる";
     toggleBook.setAttribute("aria-expanded", String(open));
   }
   // Keep Phaser's canvas mounted and its parent measurable at all times.
@@ -197,6 +208,8 @@ function showBook(open: boolean): void {
 }
 toggleBook?.addEventListener("click", () => showBook(!bookOpen));
 renderEncyclopedia();
+// Start at home instead of requiring the player to enter a forest first.
+showHome(true);
 
 type Direction = "up" | "down" | "left" | "right";
 const SPOT_LABELS = { bush: "くさむら", stump: "きりかぶ", rock: "いし" } as const;
