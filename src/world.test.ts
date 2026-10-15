@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CREATURES } from "./creatures";
-import { createWorld, isSameTile, isWalkable, MAP_HEIGHT, MAP_WIDTH, type Point } from "./world";
+import { createWorld, ENCOUNTERS_PER_EXPEDITION, isSameTile, isWalkable, MAP_HEIGHT, MAP_WIDTH, type Point } from "./world";
 
 function seededRandom(seed: number): () => number {
   let state = seed >>> 0;
@@ -50,14 +50,23 @@ describe("random forest layout", () => {
         expect(world.tiles[y][0]).toBe(1);
         expect(world.tiles[y][MAP_WIDTH - 1]).toBe(1);
       }
-      expect(world.encounters).toHaveLength(CREATURES.length);
+      expect(world.encounters).toHaveLength(ENCOUNTERS_PER_EXPEDITION);
       const positions = new Set(world.encounters.map(({ position }) => `${position.x},${position.y}`));
-      expect(positions.size).toBe(CREATURES.length);
+      expect(positions.size).toBe(ENCOUNTERS_PER_EXPEDITION);
+      expect(new Set(world.encounters.map(({ id }) => id)).size).toBe(ENCOUNTERS_PER_EXPEDITION);
+      expect(world.encounters.every(({ id }) => CREATURES.some((creature) => creature.id === id))).toBe(true);
       for (const encounter of world.encounters) {
         expect(connected.has(`${encounter.position.x},${encounter.position.y}`)).toBe(true);
         expect(Math.abs(encounter.position.x - world.player.x) + Math.abs(encounter.position.y - world.player.y)).toBeGreaterThan(1);
       }
     }
+  });
+
+  it("varies the creature lineup between expeditions", () => {
+    const lineups = new Set(Array.from({ length: 60 }, (_, seed) =>
+      createWorld(seededRandom(seed + 1200)).encounters.map((encounter) => encounter.id).sort().join(","),
+    ));
+    expect(lineups.size).toBeGreaterThan(1);
   });
 
   it("changes layout across different seeds and reproduces the same seed", () => {
