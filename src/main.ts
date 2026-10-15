@@ -67,6 +67,8 @@ const reactions: Record<string, readonly string[]> = {
   mossling: ["こけまるは にっこり わらった！", "こけまるは うれしそうに はねた！"],
   pufflet: ["ふわりんは ふわっと うかんだ！", "ふわりんは くるくる まわった！"],
   glimmer: ["きらぽんは きらきら ひかった！", "きらぽんは うれしそうに またたいた！"],
+  droplet: ["しずくんは ぷるぷる ゆれた！", "しずくんは ぴょんと はねた！"],
+  acorn: ["どんぐりんは くるんと まわった！", "どんぐりんは ぼうしを ふった！"],
 };
 function renderHome(): void {
   const grid = document.querySelector<HTMLElement>("#home-creatures");
@@ -193,7 +195,7 @@ class ForestScene extends Phaser.Scene {
     document.querySelectorAll<HTMLButtonElement>("[data-direction]").forEach((button) => {
       const dir = button.dataset.direction as Direction;
       const start = (event: PointerEvent) => {
-        if (bookOpen) return;
+        if (bookOpen || homeOpen) return;
         event.preventDefault();
         button.setPointerCapture(event.pointerId);
         this.heldDirection = dir;
@@ -226,7 +228,7 @@ class ForestScene extends Phaser.Scene {
     if (clearBanner) { delete clearBanner.dataset.completed; clearBanner.hidden = true; }
     this.updateExpeditionProgress();
     const found = loadCollection().length;
-    say(found ? `新しい森に到着！ 図鑑は ${found}/${CREATURES.length} しゅるい はっけんずみ。` : "ふしぎな森へようこそ！ 生き物たちを探そう。");
+    say(found ? `新しい森に到着！ 図鑑は ${found}/${CREATURES.length} しゅるい はっけんずみ。この森では ${this.world.encounters.length} しゅるいを さがそう！` : `ふしぎな森へようこそ！ この森では ${this.world.encounters.length} しゅるいを さがそう！`);
     this.renderWorld();
     if (bookOpen) renderEncyclopedia();
   }

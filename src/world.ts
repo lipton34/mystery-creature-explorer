@@ -3,6 +3,7 @@ import { CREATURES, type CreatureId } from "./creatures";
 export const MAP_WIDTH = 16;
 export const MAP_HEIGHT = 11;
 export const TILE_SIZE = 40;
+export const ENCOUNTERS_PER_EXPEDITION = 3;
 export type Point = { x: number; y: number };
 export type Encounter = { id: CreatureId; position: Point; discovered: boolean };
 export type World = { tiles: number[][]; player: Point; encounters: Encounter[] };
@@ -78,6 +79,14 @@ export function createWorld(random: () => number = Math.random): World {
     }
   }
 
+  // Select three distinct species with equal probability per expedition.
+  const pool = [...CREATURES];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = randomInt(0, i, random);
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const appearingCreatures = pool.slice(0, ENCOUNTERS_PER_EXPEDITION);
+
   // Pick different positions without blocking paths. Prefer spaced-out creatures.
   const candidates = queue.filter((point) => distances[point.y][point.x] >= 4);
   for (let i = candidates.length - 1; i > 0; i--) {
@@ -88,16 +97,16 @@ export function createWorld(random: () => number = Math.random): World {
   const selected: Point[] = [];
   for (const point of candidates) {
     if (selected.every((other) => distance(other, point) >= 3)) selected.push(point);
-    if (selected.length === CREATURES.length) break;
+    if (selected.length === appearingCreatures.length) break;
   }
   // A rare compact layout may lack three well-separated spots.
   for (const point of queue) {
-    if (selected.length === CREATURES.length) break;
+    if (selected.length === appearingCreatures.length) break;
     if (distances[point.y][point.x] >= 2 && !selected.some((other) => distance(other, point) === 0)) {
       selected.push(point);
     }
   }
-  const encounters: Encounter[] = CREATURES.map((creature, index) => ({
+  const encounters: Encounter[] = appearingCreatures.map((creature, index) => ({
     id: creature.id,
     position: selected[index] ?? player,
     discovered: false,
