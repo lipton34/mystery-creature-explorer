@@ -45,3 +45,18 @@ footer { color: #aec3ba; font-size: 12px; text-align: center; }
 #clear-banner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; width: min(100%, 760px); padding: 12px; border-radius: 14px; background: #fbe5a6; color: #54451c; }
 #clear-banner strong { font-size: clamp(14px, 3.5vw, 21px); }
 #clear-banner span { font-size: 13px; }
+
+/* The home is a small play space: only discovered creatures are interactive. */
+.home-interactive { border: 2px solid transparent; cursor: pointer; font: inherit; font-weight: 700; padding: 10px; }
+.home-interactive:hover { border-color: #e4c36e; }
+.home-interactive:focus-visible { outline: 3px solid #ffffff; outline-offset: 2px; }
+.home-cheer { animation: home-cheer 550ms ease-out; }
+#home-reaction { min-height: 28px; font-weight: 700; color: #fff1b7; }
+@keyframes home-cheer {
+  0%, 100% { transform: translateY(0) scale(1); }
+  35% { transform: translateY(-13px) scale(1.06); }
+  70% { transform: translateY(0) scale(0.97); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-cheer { animation: none; }
+}
