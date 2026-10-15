@@ -35,6 +35,21 @@ export function drawAnimatedCreature(
     g.fillCircle(cx + 7, cy - 7, 8);
     g.fillStyle(0xfff4f3);
     g.fillCircle(cx - 5, cy - 8, 3);
+  } else if (creature.id === "droplet") {
+    g.fillStyle(creature.accent, 0.8);
+    g.fillTriangle(cx, cy - 17, cx - 12, cy + 2, cx + 12, cy + 2);
+    g.fillStyle(creature.color);
+    g.fillEllipse(cx, cy + 4, 26, 24);
+    g.fillStyle(0xe8fbff, 0.8);
+    g.fillCircle(cx - 7, cy - 1, 3);
+  } else if (creature.id === "acorn") {
+    g.fillStyle(creature.color);
+    g.fillEllipse(cx, cy + 4, 24, 27);
+    g.fillStyle(creature.accent);
+    g.fillEllipse(cx, cy - 9, 30, 13);
+    g.fillRect(cx - 2, cy - 18, 4, 7);
+    g.fillStyle(0xf1d5ac, 0.75);
+    g.fillEllipse(cx - 6, cy + 4, 5, 9);
   } else {
     const pulse = (Math.sin(seconds * 4 + point.y) + 1) / 2;
     g.fillStyle(0xffee9c, 0.08 + pulse * 0.13);
