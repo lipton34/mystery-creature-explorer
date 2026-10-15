@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CREATURES } from "./creatures";
-import { createWorld, ENCOUNTERS_PER_EXPEDITION, isSameTile, isWalkable, MAP_HEIGHT, MAP_WIDTH, type Point } from "./world";
+import { createWorld, encounterAt, hiddenEncounterNear, ENCOUNTERS_PER_EXPEDITION, isSameTile, isWalkable, MAP_HEIGHT, MAP_WIDTH, type Point } from "./world";
 
 function seededRandom(seed: number): () => number {
   let state = seed >>> 0;
@@ -51,6 +51,7 @@ describe("random forest layout", () => {
         expect(world.tiles[y][MAP_WIDTH - 1]).toBe(1);
       }
       expect(world.encounters).toHaveLength(ENCOUNTERS_PER_EXPEDITION);
+      expect(world.encounters.filter((encounter) => encounter.hidden)).toHaveLength(1);
       const positions = new Set(world.encounters.map(({ position }) => `${position.x},${position.y}`));
       expect(positions.size).toBe(ENCOUNTERS_PER_EXPEDITION);
       expect(new Set(world.encounters.map(({ id }) => id)).size).toBe(ENCOUNTERS_PER_EXPEDITION);
@@ -59,6 +60,31 @@ describe("random forest layout", () => {
         expect(connected.has(`${encounter.position.x},${encounter.position.y}`)).toBe(true);
         expect(Math.abs(encounter.position.x - world.player.x) + Math.abs(encounter.position.y - world.player.y)).toBeGreaterThan(1);
       }
+    }
+  });
+
+  it("requires inspection for the hidden creature, and contact for visible ones", () => {
+    for (let seed = 0; seed < 50; seed++) {
+      const world = createWorld(seededRandom(seed));
+      const hidden = world.encounters.find((encounter) => encounter.hidden);
+      const visible = world.encounters.find((encounter) => !encounter.hidden);
+      expect(hidden).toBeDefined();
+      expect(visible).toBeDefined();
+      if (!hidden || !visible) continue;
+      expect(encounterAt(world, hidden.position)).toBeUndefined();
+      expect(hiddenEncounterNear(world, hidden.position)).toBe(hidden);
+      expect(encounterAt(world, visible.position)).toBe(visible);
+      expect(hiddenEncounterNear(world, visible.position)).toBeUndefined();
+      const neighbor = [
+        { x: hidden.position.x + 1, y: hidden.position.y },
+        { x: hidden.position.x - 1, y: hidden.position.y },
+        { x: hidden.position.x, y: hidden.position.y + 1 },
+        { x: hidden.position.x, y: hidden.position.y - 1 },
+      ].find((point) => isWalkable(world, point));
+      expect(neighbor).toBeDefined();
+      if (neighbor) expect(hiddenEncounterNear(world, neighbor)).toBe(hidden);
+      hidden.discovered = true;
+      expect(hiddenEncounterNear(world, hidden.position)).toBeUndefined();
     }
   });
 
