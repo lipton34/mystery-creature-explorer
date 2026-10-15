@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import "./style.css";
-import { createWorld, isSameTile, isWalkable, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Point, type World } from "./world";
+import { createWorld, encounterAt, hiddenEncounterNear, isWalkable, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Point, type World } from "./world";
 import { loadCollection, recordDiscovery } from "./collection";
 import { CREATURES, findCreature } from "./creatures";
 import { renderEncyclopedia } from "./encyclopedia";
@@ -34,6 +34,7 @@ app.innerHTML = `
   </section>
   </main>
   <p id="expedition-status"></p>
+  <button id="inspect" type="button">🔎 しらべる</button>
   <div id="clear-banner" role="status" aria-live="polite" hidden>
     <strong>🎉 この森の いきものを ぜんぶ みつけた！ 🎉</strong>
     <span>おめでとう！ いつでも おうちに かえれるよ！</span>
@@ -60,6 +61,7 @@ const home = document.querySelector<HTMLElement>("#home");
 const homeButton = document.querySelector<HTMLButtonElement>("#go-home");
 const resetButton = document.querySelector<HTMLButtonElement>("#reset");
 const progressLabel = document.querySelector<HTMLElement>("#expedition-status");
+const inspectButton = document.querySelector<HTMLButtonElement>("#inspect");
 const clearBanner = document.querySelector<HTMLElement>("#clear-banner");
 const homeReaction = document.querySelector<HTMLElement>("#home-reaction");
 const reactionIndex = new Map<string, number>();
@@ -111,6 +113,7 @@ function showHome(open: boolean): void {
   if (homeButton) homeButton.hidden = open;
   if (resetButton) resetButton.hidden = open;
   if (progressLabel) progressLabel.hidden = open;
+  if (inspectButton) inspectButton.hidden = open;
   if (clearBanner) clearBanner.hidden = open || !clearBanner.dataset.completed;
   if (open) {
     renderHome();
@@ -141,6 +144,7 @@ function showBook(open: boolean): void {
   if (homeButton) homeButton.hidden = open || homeOpen;
   if (resetButton) resetButton.hidden = open || homeOpen;
   if (progressLabel) progressLabel.hidden = open || homeOpen;
+  if (inspectButton) inspectButton.hidden = open || homeOpen;
   if (clearBanner) clearBanner.hidden = open || homeOpen || !clearBanner.dataset.completed;
   if (toggleBook) {
     toggleBook.textContent = open ? "🌲 もりにもどる" : "📖 ずかんをみる";
@@ -173,9 +177,15 @@ class ForestScene extends Phaser.Scene {
   create(): void {
     this.graphics = this.add.graphics();
     this.newForest();
+    inspectButton?.addEventListener("click", () => this.inspect());
     startNewExpedition = () => this.newForest();
     this.keyHandler = (event: KeyboardEvent) => {
       if (bookOpen || homeOpen) return;
+      if (event.key === " " || event.key === "Enter") {
+        event.preventDefault();
+        if (!event.repeat) this.inspect();
+        return;
+      }
       const map: Record<string, Direction> = {
         ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
         w: "up", a: "left", s: "down", d: "right",
@@ -228,7 +238,7 @@ class ForestScene extends Phaser.Scene {
     if (clearBanner) { delete clearBanner.dataset.completed; clearBanner.hidden = true; }
     this.updateExpeditionProgress();
     const found = loadCollection().length;
-    say(found ? `新しい森に到着！ 図鑑は ${found}/${CREATURES.length} しゅるい はっけんずみ。この森では ${this.world.encounters.length} しゅるいを さがそう！` : `ふしぎな森へようこそ！ この森では ${this.world.encounters.length} しゅるいを さがそう！`);
+    say(found ? `新しい森に到着！ 図鑑は ${found}/${CREATURES.length} しゅるい はっけんずみ。くさむらも しらべてみよう！` : "ふしぎな森へようこそ！ くさむらも しらべてみよう！");
     this.renderWorld();
     if (bookOpen) renderEncyclopedia();
   }
@@ -238,26 +248,39 @@ class ForestScene extends Phaser.Scene {
     const next = { x: this.world.player.x + vector.x, y: this.world.player.y + vector.y };
     if (!isWalkable(this.world, next)) return;
     this.world.player = next;
-    for (const encounter of this.world.encounters) {
-      if (encounter.discovered || !isSameTile(next, encounter.position)) continue;
-      encounter.discovered = true;
-      const creature = findCreature(encounter.id);
-      if (!creature) continue;
-      const isNew = recordDiscovery(creature.id);
-      this.sparkle = { position: { ...encounter.position }, startMs: this.time.now };
-      this.updateExpeditionProgress();
-      if (isExpeditionComplete(this.world.encounters) && clearBanner) {
-        clearBanner.dataset.completed = "true";
-        clearBanner.hidden = false;
-      }
-      say(isNew ? `✨ はじめまして、${creature.name}！ ずかんに とうろくしたよ！` : `🌟 ${creature.name}に あえた！ （ずかん とうろくずみ）`);
-    }
+    const encounter = encounterAt(this.world, next);
+    if (encounter) this.discover(encounter);
     this.renderWorld();
+  }
+
+  private inspect(): void {
+    if (bookOpen || homeOpen) return;
+    const encounter = hiddenEncounterNear(this.world, this.world.player);
+    if (!encounter) {
+      say("このあたりには なにも ないみたい。🌿 くさむらを さがしてみよう！");
+      return;
+    }
+    this.discover(encounter);
+    this.renderWorld();
+  }
+
+  private discover(encounter: World["encounters"][number]): void {
+    encounter.discovered = true;
+    const creature = findCreature(encounter.id);
+    if (!creature) return;
+    const isNew = recordDiscovery(creature.id);
+    this.sparkle = { position: { ...encounter.position }, startMs: this.time.now };
+    this.updateExpeditionProgress();
+    if (isExpeditionComplete(this.world.encounters) && clearBanner) {
+      clearBanner.dataset.completed = "true";
+      clearBanner.hidden = false;
+    }
+    say(isNew ? `✨ ${creature.name}を はっけん！ ずかんに とうろくしたよ！` : `🌟 ${creature.name}を はっけん！ （ずかん とうろくずみ）`);
   }
 
   private updateExpeditionProgress(): void {
     const { found, total } = expeditionProgress(this.world.encounters);
-    if (progressLabel) progressLabel.textContent = `🌿 この森で ${found} / ${total} しゅるい はっけん`;
+    if (progressLabel) progressLabel.textContent = `🌿 この森で ${found} / ${total} しゅるい はっけん · 🔎 くさむらも しらべよう`;
   }
 
   private renderWorld(): void {
@@ -282,7 +305,17 @@ class ForestScene extends Phaser.Scene {
     }
     for (const encounter of this.world.encounters) {
       const creature = findCreature(encounter.id);
-      if (creature) drawAnimatedCreature(g, creature, encounter.position, this.time.now / 1000);
+      if (encounter.hidden && !encounter.discovered) {
+        const bx = encounter.position.x * TILE_SIZE + 20;
+        const by = encounter.position.y * TILE_SIZE + 23;
+        g.fillStyle(0x275c38);
+        g.fillCircle(bx - 8, by + 3, 11);
+        g.fillCircle(bx + 8, by + 3, 11);
+        g.fillStyle(0x81b663);
+        g.fillCircle(bx, by - 6, 11);
+        g.fillStyle(0xf9e6a0);
+        g.fillCircle(bx + 11, by - 9, 3);
+      } else if (creature) drawAnimatedCreature(g, creature, encounter.position, this.time.now / 1000);
     }
     const p = this.world.player;
     g.fillStyle(0x213c3f);

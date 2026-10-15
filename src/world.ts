@@ -5,7 +5,7 @@ export const MAP_HEIGHT = 11;
 export const TILE_SIZE = 40;
 export const ENCOUNTERS_PER_EXPEDITION = 3;
 export type Point = { x: number; y: number };
-export type Encounter = { id: CreatureId; position: Point; discovered: boolean };
+export type Encounter = { id: CreatureId; position: Point; discovered: boolean; hidden?: boolean };
 export type World = { tiles: number[][]; player: Point; encounters: Encounter[] };
 type Room = { x: number; y: number; width: number; height: number; center: Point };
 const DIRECTIONS: readonly Point[] = [
@@ -110,6 +110,7 @@ export function createWorld(random: () => number = Math.random): World {
     id: creature.id,
     position: selected[index] ?? player,
     discovered: false,
+    hidden: index === 0,
   }));
   return { tiles, player, encounters };
 }
@@ -120,4 +121,19 @@ export function isWalkable(world: World, position: Point): boolean {
 
 export function isSameTile(a: Point, b: Point): boolean {
   return a.x === b.x && a.y === b.y;
+}
+
+/** A visible creature is met by sharing its tile; a hidden one requires inspection. */
+export function encounterAt(world: World, position: Point): Encounter | undefined {
+  return world.encounters.find((encounter) =>
+    !encounter.discovered && !encounter.hidden && isSameTile(position, encounter.position),
+  );
+}
+
+/** Inspect your tile or an adjacent one to find the creature in a bush. */
+export function hiddenEncounterNear(world: World, position: Point): Encounter | undefined {
+  return world.encounters.find((encounter) =>
+    !encounter.discovered && encounter.hidden &&
+    Math.abs(position.x - encounter.position.x) + Math.abs(position.y - encounter.position.y) <= 1,
+  );
 }
