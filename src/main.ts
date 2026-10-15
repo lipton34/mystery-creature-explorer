@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import "./style.css";
-import { createWorld, encounterAt, hiddenEncounterNear, isWalkable, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Point, type World } from "./world";
+import { createWorld, encounterAt, hiddenEncounterNear, nearbySearchSpot, isWalkable, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Point, type World } from "./world";
 import { loadCollection, recordDiscovery } from "./collection";
 import { CREATURES, findCreature } from "./creatures";
 import { renderEncyclopedia } from "./encyclopedia";
@@ -158,6 +158,7 @@ toggleBook?.addEventListener("click", () => showBook(!bookOpen));
 renderEncyclopedia();
 
 type Direction = "up" | "down" | "left" | "right";
+const SPOT_LABELS = { bush: "くさむら", stump: "きりかぶ", rock: "いし" } as const;
 const MOVES: Record<Direction, Point> = {
   up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
   left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
@@ -238,7 +239,7 @@ class ForestScene extends Phaser.Scene {
     if (clearBanner) { delete clearBanner.dataset.completed; clearBanner.hidden = true; }
     this.updateExpeditionProgress();
     const found = loadCollection().length;
-    say(found ? `新しい森に到着！ 図鑑は ${found}/${CREATURES.length} しゅるい はっけんずみ。くさむらも しらべてみよう！` : "ふしぎな森へようこそ！ くさむらも しらべてみよう！");
+    say(found ? `新しい森に到着！ 図鑑は ${found}/${CREATURES.length} しゅるい はっけんずみ。きになる ばしょを しらべてみよう！` : "ふしぎな森へようこそ！ きになる ばしょを しらべてみよう！");
     this.renderWorld();
     if (bookOpen) renderEncyclopedia();
   }
@@ -248,6 +249,7 @@ class ForestScene extends Phaser.Scene {
     const next = { x: this.world.player.x + vector.x, y: this.world.player.y + vector.y };
     if (!isWalkable(this.world, next)) return;
     this.world.player = next;
+    this.updateExpeditionProgress();
     const encounter = encounterAt(this.world, next);
     if (encounter) this.discover(encounter);
     this.renderWorld();
@@ -257,7 +259,7 @@ class ForestScene extends Phaser.Scene {
     if (bookOpen || homeOpen) return;
     const encounter = hiddenEncounterNear(this.world, this.world.player);
     if (!encounter) {
-      say("このあたりには なにも ないみたい。🌿 くさむらを さがしてみよう！");
+      say("このあたりには なにも ないみたい。🌿 きになる ばしょを さがしてみよう！");
       return;
     }
     this.discover(encounter);
@@ -280,7 +282,8 @@ class ForestScene extends Phaser.Scene {
 
   private updateExpeditionProgress(): void {
     const { found, total } = expeditionProgress(this.world.encounters);
-    if (progressLabel) progressLabel.textContent = `🌿 この森で ${found} / ${total} しゅるい はっけん · 🔎 くさむらも しらべよう`;
+    const spot = nearbySearchSpot(this.world, this.world.player);
+    if (progressLabel) progressLabel.textContent = `🌿 この森で ${found} / ${total} しゅるい はっけん` + (spot ? ` · 🔎 ${SPOT_LABELS[spot]}を しらべられるよ！` : " · 🔎 あやしい ばしょを さがそう");
   }
 
   private renderWorld(): void {
@@ -308,13 +311,29 @@ class ForestScene extends Phaser.Scene {
       if (encounter.hidden && !encounter.discovered) {
         const bx = encounter.position.x * TILE_SIZE + 20;
         const by = encounter.position.y * TILE_SIZE + 23;
-        g.fillStyle(0x275c38);
-        g.fillCircle(bx - 8, by + 3, 11);
-        g.fillCircle(bx + 8, by + 3, 11);
-        g.fillStyle(0x81b663);
-        g.fillCircle(bx, by - 6, 11);
-        g.fillStyle(0xf9e6a0);
-        g.fillCircle(bx + 11, by - 9, 3);
+        if (encounter.spot === "rock") {
+          g.fillStyle(0x586c76);
+          g.fillEllipse(bx, by + 6, 31, 22);
+          g.fillStyle(0xa9b6b8);
+          g.fillTriangle(bx - 14, by + 5, bx - 3, by - 12, bx + 14, by + 5);
+          g.fillStyle(0xe2e8dc);
+          g.fillCircle(bx + 7, by - 7, 3);
+        } else if (encounter.spot === "stump") {
+          g.fillStyle(0x705139);
+          g.fillRect(bx - 11, by - 3, 22, 19);
+          g.fillStyle(0xbe925e);
+          g.fillEllipse(bx, by - 4, 32, 14);
+          g.lineStyle(2, 0x876343);
+          g.strokeEllipse(bx, by - 4, 20, 8);
+        } else {
+          g.fillStyle(0x275c38);
+          g.fillCircle(bx - 8, by + 3, 11);
+          g.fillCircle(bx + 8, by + 3, 11);
+          g.fillStyle(0x81b663);
+          g.fillCircle(bx, by - 6, 11);
+          g.fillStyle(0xf9e6a0);
+          g.fillCircle(bx + 11, by - 9, 3);
+        }
       } else if (creature) drawAnimatedCreature(g, creature, encounter.position, this.time.now / 1000);
     }
     const p = this.world.player;
