@@ -20,6 +20,10 @@ app.innerHTML = `
   </header>
   <main id="stage">
   <div id="game" aria-label="探索ゲーム"></div>
+  <aside id="expedition-hud" aria-label="探索のヒント">
+    <p id="expedition-status" aria-live="polite"></p>
+    <p id="explore-tip" aria-live="polite">森をたんけんしてみよう！</p>
+  </aside>
   <section id="encyclopedia" aria-label="生き物図鑑" hidden>
     <div class="book-heading"><h2>📖 いきものずかん</h2><span id="collection-count"></span></div>
     <div id="encyclopedia-grid"></div>
@@ -33,19 +37,15 @@ app.innerHTML = `
     <button id="start-expedition" type="button">🌲 あたらしい森へ！</button>
   </section>
   </main>
-  <section id="expedition-hud" aria-label="探索の進みぐあい">
-    <p id="expedition-status" aria-live="polite"></p>
-    <p id="explore-tip">いきものは おなじマスで はっけん。あやしい ばしょは しらべよう！</p>
-  </section>
-  <div id="discovery-banner" role="status" aria-live="polite" hidden>
-    <span id="discovery-icon" aria-hidden="true">✨</span>
-    <div><strong id="discovery-heading"></strong><p id="discovery-detail"></p></div>
+  <div id="announcement" class="announcement" role="dialog" aria-modal="true" aria-labelledby="announcement-heading" hidden>
+    <div class="announcement-card">
+      <span id="announcement-icon" class="announcement-icon" aria-hidden="true">✨</span>
+      <h2 id="announcement-heading"></h2>
+      <p id="announcement-detail"></p>
+      <button id="announcement-close" type="button">つづける ▶</button>
+    </div>
   </div>
   <button id="inspect" type="button" aria-label="まわりをしらべる">🔎 しらべる</button>
-  <div id="clear-banner" role="status" aria-live="polite" hidden>
-    <strong>🎉 この森の いきものを ぜんぶ みつけた！ 🎉</strong>
-    <span>おめでとう！ いつでも おうちに かえれるよ！</span>
-  </div>
   <p id="message" role="status" aria-live="polite">森を歩いて、ふしぎな生き物を見つけよう！</p>
   <div id="controls" aria-label="移動操作">
     <button data-direction="up" aria-label="上へ">▲</button>
@@ -70,12 +70,36 @@ const resetButton = document.querySelector<HTMLButtonElement>("#reset");
 const progressLabel = document.querySelector<HTMLElement>("#expedition-status");
 const expeditionHud = document.querySelector<HTMLElement>("#expedition-hud");
 const exploreTip = document.querySelector<HTMLElement>("#explore-tip");
-const discoveryBanner = document.querySelector<HTMLElement>("#discovery-banner");
-const discoveryIcon = document.querySelector<HTMLElement>("#discovery-icon");
-const discoveryHeading = document.querySelector<HTMLElement>("#discovery-heading");
-const discoveryDetail = document.querySelector<HTMLElement>("#discovery-detail");
+const announcement = document.querySelector<HTMLElement>("#announcement");
+const announcementIcon = document.querySelector<HTMLElement>("#announcement-icon");
+const announcementHeading = document.querySelector<HTMLElement>("#announcement-heading");
+const announcementDetail = document.querySelector<HTMLElement>("#announcement-detail");
+const announcementClose = document.querySelector<HTMLButtonElement>("#announcement-close");
+let announcementOpen = false;
+let nextAnnouncement: (() => void) | undefined;
+function showAnnouncement(icon: string, heading: string, detail: string, afterClose?: () => void): void {
+  announcementOpen = true;
+  nextAnnouncement = afterClose;
+  if (announcementIcon) announcementIcon.textContent = icon;
+  if (announcementHeading) announcementHeading.textContent = heading;
+  if (announcementDetail) announcementDetail.textContent = detail;
+  if (announcement) announcement.hidden = false;
+  announcementClose?.focus();
+}
+function closeAnnouncement(): void {
+  if (!announcementOpen) return;
+  announcementOpen = false;
+  if (announcement) announcement.hidden = true;
+  const next = nextAnnouncement;
+  nextAnnouncement = undefined;
+  if (next) next();
+  else {
+    inspectButton?.focus({ preventScroll: true });
+  }
+}
+announcementClose?.addEventListener("click", closeAnnouncement);
 const inspectButton = document.querySelector<HTMLButtonElement>("#inspect");
-const clearBanner = document.querySelector<HTMLElement>("#clear-banner");
+
 const homeReaction = document.querySelector<HTMLElement>("#home-reaction");
 const reactionIndex = new Map<string, number>();
 const reactions: Record<string, readonly string[]> = {
@@ -127,9 +151,9 @@ function showHome(open: boolean): void {
   if (resetButton) resetButton.hidden = open;
   if (expeditionHud) expeditionHud.hidden = open;
   if (progressLabel) progressLabel.hidden = open;
-  if (discoveryBanner) discoveryBanner.hidden = true;
+
   if (inspectButton) inspectButton.hidden = open;
-  if (clearBanner) clearBanner.hidden = open || !clearBanner.dataset.completed;
+
   if (open) {
     renderHome();
     if (homeReaction) homeReaction.textContent = "なかまを タップしてみよう！";
@@ -160,9 +184,9 @@ function showBook(open: boolean): void {
   if (resetButton) resetButton.hidden = open || homeOpen;
   if (expeditionHud) expeditionHud.hidden = open || homeOpen;
   if (progressLabel) progressLabel.hidden = open || homeOpen;
-  if (discoveryBanner && (open || homeOpen)) discoveryBanner.hidden = true;
+
   if (inspectButton) inspectButton.hidden = open || homeOpen;
-  if (clearBanner) clearBanner.hidden = open || homeOpen || !clearBanner.dataset.completed;
+
   if (toggleBook) {
     toggleBook.textContent = open ? "🌲 もりにもどる" : "📖 ずかんをみる";
     toggleBook.setAttribute("aria-expanded", String(open));
@@ -189,7 +213,7 @@ class ForestScene extends Phaser.Scene {
   private lastMoveAt = 0;
   private lastFrameAt = 0;
   private sparkle?: { position: Point; startMs: number };
-  private discoveryHideEvent?: Phaser.Time.TimerEvent;
+  private stepsWithoutDiscovery = 0;
 
   constructor() { super("Forest"); }
 
@@ -199,7 +223,7 @@ class ForestScene extends Phaser.Scene {
     inspectButton?.addEventListener("click", () => this.inspect());
     startNewExpedition = () => this.newForest();
     this.keyHandler = (event: KeyboardEvent) => {
-      if (bookOpen || homeOpen) return;
+      if (bookOpen || homeOpen || announcementOpen) return;
       if (event.target instanceof HTMLElement && event.target.closest("button, input, textarea, select")) return;
       if (event.key === " ") {
         event.preventDefault();
@@ -219,7 +243,7 @@ class ForestScene extends Phaser.Scene {
     window.addEventListener("keydown", this.keyHandler);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       if (this.keyHandler) window.removeEventListener("keydown", this.keyHandler);
-      this.discoveryHideEvent?.remove();
+
     });
     window.addEventListener("blur", () => { this.heldDirection = null; });
 
@@ -227,7 +251,7 @@ class ForestScene extends Phaser.Scene {
     document.querySelectorAll<HTMLButtonElement>("[data-direction]").forEach((button) => {
       const dir = button.dataset.direction as Direction;
       const start = (event: PointerEvent) => {
-        if (bookOpen || homeOpen) return;
+        if (bookOpen || homeOpen || announcementOpen) return;
         event.preventDefault();
         button.setPointerCapture(event.pointerId);
         this.heldDirection = dir;
@@ -243,11 +267,11 @@ class ForestScene extends Phaser.Scene {
   }
 
   update(time: number): void {
-    if (time - this.lastFrameAt >= 50 && !bookOpen && !homeOpen) {
+    if (time - this.lastFrameAt >= 50 && !bookOpen && !homeOpen && !announcementOpen) {
       this.lastFrameAt = time;
       this.renderWorld();
     }
-    if (this.heldDirection && !bookOpen && !homeOpen && time - this.lastMoveAt >= 160) {
+    if (this.heldDirection && !bookOpen && !homeOpen && !announcementOpen && time - this.lastMoveAt >= 160) {
       this.lastMoveAt = time;
       this.move(this.heldDirection);
     }
@@ -257,9 +281,10 @@ class ForestScene extends Phaser.Scene {
     this.world = createWorld();
     this.heldDirection = null;
     this.sparkle = undefined;
-    this.discoveryHideEvent?.remove();
-    if (discoveryBanner) discoveryBanner.hidden = true;
-    if (clearBanner) { delete clearBanner.dataset.completed; clearBanner.hidden = true; }
+    this.stepsWithoutDiscovery = 0;
+    announcementOpen = false;
+    nextAnnouncement = undefined;
+    if (announcement) announcement.hidden = true;
     this.updateExpeditionProgress();
     const found = loadCollection().length;
     say(found ? `新しい森に到着！ 図鑑は ${found}/${CREATURES.length} しゅるい はっけんずみ。きになる ばしょを しらべてみよう！` : "ふしぎな森へようこそ！ きになる ばしょを しらべてみよう！");
@@ -272,6 +297,7 @@ class ForestScene extends Phaser.Scene {
     const next = { x: this.world.player.x + vector.x, y: this.world.player.y + vector.y };
     if (!isWalkable(this.world, next)) return;
     this.world.player = next;
+    this.stepsWithoutDiscovery += 1;
     this.updateExpeditionProgress();
     const encounter = encounterAt(this.world, next);
     if (encounter) this.discover(encounter);
@@ -279,7 +305,7 @@ class ForestScene extends Phaser.Scene {
   }
 
   private inspect(): void {
-    if (bookOpen || homeOpen) return;
+    if (bookOpen || homeOpen || announcementOpen) return;
     const encounter = hiddenEncounterNear(this.world, this.world.player);
     if (!encounter) {
       say("このあたりには なにも ないみたい。🌿 きになる ばしょを さがしてみよう！");
@@ -294,20 +320,17 @@ class ForestScene extends Phaser.Scene {
     const creature = findCreature(encounter.id);
     if (!creature) return;
     const isNew = recordDiscovery(creature.id);
-    if (discoveryIcon) discoveryIcon.textContent = creature.icon;
-    if (discoveryHeading) discoveryHeading.textContent = isNew ? `はじめまして！ ${creature.name}` : `${creature.name}に またあえた！`;
-    if (discoveryDetail) discoveryDetail.textContent = isNew ? "🎉 ずかんに あたらしく とうろくしたよ！" : "🌟 こんかいの森でも はっけん！";
-    if (discoveryBanner) discoveryBanner.hidden = false;
-    this.discoveryHideEvent?.remove();
-    this.discoveryHideEvent = this.time.delayedCall(2800, () => {
-      if (discoveryBanner) discoveryBanner.hidden = true;
-    });
     this.sparkle = { position: { ...encounter.position }, startMs: this.time.now };
     this.updateExpeditionProgress();
-    if (isExpeditionComplete(this.world.encounters) && clearBanner) {
-      clearBanner.dataset.completed = "true";
-      clearBanner.hidden = false;
-    }
+    const completed = isExpeditionComplete(this.world.encounters);
+    showAnnouncement(
+      creature.icon,
+      isNew ? `はじめまして！ ${creature.name}` : `${creature.name}に またあえた！`,
+      isNew ? "ずかんに あたらしく とうろくしたよ！" : "こんかいの森でも はっけん！",
+      completed ? () => showAnnouncement("🎉", "この森の いきものを ぜんぶ みつけた！", "おめでとう！ おうちへ かえってもいいし、森を あるいてもいいよ！") : undefined,
+    );
+    this.heldDirection = null;
+    this.stepsWithoutDiscovery = 0;
     say(isNew ? `✨ ${creature.name}を はっけん！ ずかんに とうろくしたよ！` : `🌟 ${creature.name}を はっけん！ （ずかん とうろくずみ）`);
   }
 
@@ -315,8 +338,18 @@ class ForestScene extends Phaser.Scene {
     const { found, total } = expeditionProgress(this.world.encounters);
     const spot = nearbySearchSpot(this.world, this.world.player);
     if (progressLabel) progressLabel.textContent = `🌿 この森で ${found} / ${total} しゅるい はっけん`;
-    if (exploreTip) exploreTip.textContent = spot ? `🔎 ${SPOT_LABELS[spot]}を しらべてみよう！` : "あやしい ばしょを さがそう！";
+    const comments = [
+      "どんな いきものが いるかな？",
+      "あわてず ゆっくり たんけんしよう！",
+      "くさむらや いしも みてみよう！",
+      "まだ みぬ なかまが いるかも！",
+      "つぎは どこへ いってみよう？",
+    ];
+    if (exploreTip) exploreTip.textContent = spot
+      ? `🔎 ${SPOT_LABELS[spot]}を しらべてみよう！`
+      : comments[Math.floor(this.stepsWithoutDiscovery / 7) % comments.length];
     if (inspectButton) {
+      inspectButton.disabled = !spot || announcementOpen;
       inspectButton.classList.toggle("inspect-ready", Boolean(spot));
       inspectButton.textContent = spot ? `🔎 ${SPOT_LABELS[spot]}を しらべる！` : "🔎 しらべる";
     }
