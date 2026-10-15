@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CREATURES } from "./creatures";
-import { createWorld, encounterAt, hiddenEncounterNear, ENCOUNTERS_PER_EXPEDITION, isSameTile, isWalkable, MAP_HEIGHT, MAP_WIDTH, type Point } from "./world";
+import { createWorld, encounterAt, hiddenEncounterNear, nearbySearchSpot, ENCOUNTERS_PER_EXPEDITION, isSameTile, isWalkable, MAP_HEIGHT, MAP_WIDTH, type Point } from "./world";
 
 function seededRandom(seed: number): () => number {
   let state = seed >>> 0;
@@ -52,6 +52,7 @@ describe("random forest layout", () => {
       }
       expect(world.encounters).toHaveLength(ENCOUNTERS_PER_EXPEDITION);
       expect(world.encounters.filter((encounter) => encounter.hidden)).toHaveLength(1);
+      expect(["bush", "stump", "rock"]).toContain(world.encounters.find((encounter) => encounter.hidden)?.spot);
       const positions = new Set(world.encounters.map(({ position }) => `${position.x},${position.y}`));
       expect(positions.size).toBe(ENCOUNTERS_PER_EXPEDITION);
       expect(new Set(world.encounters.map(({ id }) => id)).size).toBe(ENCOUNTERS_PER_EXPEDITION);
@@ -73,6 +74,7 @@ describe("random forest layout", () => {
       if (!hidden || !visible) continue;
       expect(encounterAt(world, hidden.position)).toBeUndefined();
       expect(hiddenEncounterNear(world, hidden.position)).toBe(hidden);
+      expect(nearbySearchSpot(world, hidden.position)).toBe(hidden.spot);
       expect(encounterAt(world, visible.position)).toBe(visible);
       expect(hiddenEncounterNear(world, visible.position)).toBeUndefined();
       const neighbor = [
@@ -85,7 +87,15 @@ describe("random forest layout", () => {
       if (neighbor) expect(hiddenEncounterNear(world, neighbor)).toBe(hidden);
       hidden.discovered = true;
       expect(hiddenEncounterNear(world, hidden.position)).toBeUndefined();
+      expect(nearbySearchSpot(world, hidden.position)).toBeUndefined();
     }
+  });
+
+  it("uses all three types of hidden search spots across generated forests", () => {
+    const kinds = new Set(Array.from({ length: 200 }, (_, seed) =>
+      createWorld(seededRandom(seed + 4000)).encounters.find((encounter) => encounter.hidden)?.spot,
+    ));
+    expect(kinds).toEqual(new Set(["bush", "stump", "rock"]));
   });
 
   it("varies the creature lineup between expeditions", () => {
