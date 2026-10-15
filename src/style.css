@@ -61,3 +61,6 @@ footer { color: #aec3ba; font-size: 12px; text-align: center; }
 @media (prefers-reduced-motion: reduce) {
   .home-friend, .home-friend.is-reacting .home-creature-icon { transition: none; animation: none; }
 }
+
+#inspect { width: min(100%, 260px); background: #b8e6aa; color: #29402f; font-size: 17px; }
+#inspect[hidden] { display: none; }
