@@ -156,3 +156,48 @@ footer { width: min(100%, 760px); line-height: 1.6; }
   #stage > #expedition-hud #expedition-status { font-size: 11px; }
   #stage > #expedition-hud #explore-tip { font-size: 11px; }
 }
+
+/* Three distinct screen identities: forest, cozy home, and illustrated storybook. */
+#app { transition: background-color 220ms ease; width: 100%; }
+#app[data-screen="forest"] { background: radial-gradient(ellipse at 50% 0%, #295e49 0%, #122d31 70%); }
+#app[data-screen="home"] { background: radial-gradient(ellipse at 50% 0%, #8a6147 0%, #4e392f 65%, #302c30 100%); }
+#app[data-screen="book"] { background: radial-gradient(ellipse at 50% 0%, #6c5685 0%, #37344e 70%); }
+#app[data-screen="home"] header, #app[data-screen="book"] header { color: #fff5e3; }
+#home {
+  background:
+    linear-gradient(0deg, #886440 0%, #886440 21%, transparent 21%),
+    repeating-linear-gradient(90deg, transparent 0 36px, rgba(255,255,255,.06) 36px 39px),
+    linear-gradient(150deg, #dba56c 0%, #c89062 55%, #b57d58 100%);
+  color: #4b3426;
+  border: 5px solid #f4d5a2;
+  box-shadow: inset 0 0 0 5px rgba(121,69,37,.28);
+}
+#home h2 { color: #603b24; text-shadow: 0 2px 0 #ffe3ad; }
+#home p { color: #503827; }
+#home .home-hero { font-size: clamp(60px, 12vw, 92px); filter: drop-shadow(0 8px 3px rgba(94,51,31,.2)); }
+#home .home-decor { font-size: clamp(22px, 5vw, 32px); letter-spacing: .7em; }
+#home .home-creature { border: 3px solid #d3a66d; box-shadow: 0 5px 0 rgba(109,71,43,.2); }
+#home .home-unknown { border-color: #8d8171; }
+#home #home-reaction { color: #5c3b27; }
+#home #start-expedition { background: #a8d59f; border: 3px solid #f1e5b1; }
+#encyclopedia {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 28px, rgba(141,109,65,.09) 28px 29px),
+    linear-gradient(100deg, #d9bc83 0%, #f8ebc4 7%, #fcf0ce 94%, #e0c18d 100%);
+  border: 6px solid #754d75;
+  color: #493b4b;
+  box-shadow: inset 14px 0 13px -8px rgba(115,68,51,.3), inset -14px 0 13px -8px rgba(115,68,51,.22);
+}
+#encyclopedia .book-emblem { font-size: 44px; text-align: center; margin-bottom: 4px; }
+#encyclopedia .book-heading { border-bottom: 3px double #aa8455; padding-bottom: 10px; }
+#encyclopedia .book-heading h2 { color: #684561; }
+#encyclopedia #collection-count { color: #75503b; font-weight: 700; }
+#encyclopedia .creature-card { background: #fff8e7; border: 2px solid #bca27f; box-shadow: 0 4px 0 rgba(117,91,64,.12); }
+#encyclopedia .creature-card.unknown { background: #e0d7c8; color: #726a70; border-style: dashed; }
+#app[data-screen="forest"] #game { border-color: #77a97e; }
+@media (max-width: 480px) {
+  #encyclopedia, #home { border-width: 3px; }
+  #home .home-decor { letter-spacing: .2em; }
+  #encyclopedia .book-emblem { font-size: 30px; }
+}
+@media (prefers-reduced-motion: reduce) { #app { transition: none; } }
