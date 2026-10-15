@@ -64,3 +64,34 @@ footer { color: #aec3ba; font-size: 12px; text-align: center; }
 
 #inspect { width: min(100%, 260px); background: #b8e6aa; color: #29402f; font-size: 17px; }
 #inspect[hidden] { display: none; }
+
+/* v1.0: readable instructions and clear discovery feedback across devices. */
+.version-label { font-size: 11px; font-weight: 600; opacity: .75; vertical-align: middle; }
+#expedition-hud { width: min(100%, 760px); display: grid; gap: 6px; padding: 11px 14px; border-radius: 12px; background: #254a40; text-align: center; }
+#expedition-hud[hidden] { display: none; }
+#expedition-hud #expedition-status { width: 100%; font-size: 17px; }
+#explore-tip { font-size: 14px; line-height: 1.5; color: #e7f2cf; }
+#discovery-banner { width: min(100%, 760px); display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px 18px; border-radius: 14px; background: #fff1bb; color: #4a4028; border: 2px solid #f9cc74; }
+#discovery-banner[hidden] { display: none; }
+#discovery-icon { font-size: 42px; }
+#discovery-heading { display: block; font-size: clamp(18px, 4.5vw, 24px); }
+#discovery-detail { margin-top: 4px; font-size: 14px; }
+#inspect { min-height: 50px; transition: background-color 120ms ease, transform 120ms ease; }
+#inspect.inspect-ready { background: #ffe5a2; border: 2px solid #fff2ce; transform: scale(1.03); }
+#controls { grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(2, 54px); gap: 6px; }
+#controls button { min-width: 64px; min-height: 54px; }
+footer { width: min(100%, 760px); line-height: 1.6; }
+@media (max-width: 480px) {
+  #app { padding: 10px 8px; gap: 8px; }
+  header { justify-content: center; }
+  .header-actions { justify-content: center; }
+  .header-actions button { font-size: 13px; padding: 10px 12px; }
+  #encyclopedia, #home { padding: 12px; }
+  .home-creature { width: 92px; min-height: 94px; }
+  .home-creature-icon { font-size: 34px; }
+  #discovery-banner { gap: 10px; padding: 10px; }
+  #discovery-icon { font-size: 34px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #inspect { transition: none; transform: none; }
+}
