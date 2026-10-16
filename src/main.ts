@@ -25,16 +25,6 @@ app.innerHTML = `
   </header>
   <main id="stage">
   <div id="game" aria-label="探索ゲーム"></div>
-  <aside id="expedition-hud" aria-label="探索のヒント">
-    <p id="expedition-status" aria-live="polite"></p>
-    <div id="exploration-guidance" aria-live="polite" aria-atomic="true">
-      <span id="companion-portrait" aria-hidden="true" hidden></span>
-      <div class="guidance-text">
-        <strong id="companion-name" hidden></strong>
-        <p id="explore-tip">森をたんけんしてみよう！</p>
-      </div>
-    </div>
-  </aside>
   <section id="encyclopedia" aria-label="モリルの図鑑" hidden>
     <div class="book-emblem" aria-hidden="true">📚</div>
     <div class="book-heading"><h2>📖 モリルのずかん</h2><span id="collection-count"></span></div>
@@ -49,6 +39,16 @@ app.innerHTML = `
     <button id="start-expedition" type="button">🌲 あたらしい森へ！</button>
   </section>
   </main>
+  <aside id="expedition-hud" aria-label="探索のヒント">
+    <p id="expedition-status" aria-live="polite"></p>
+    <div id="exploration-guidance" aria-live="polite" aria-atomic="true">
+      <span id="companion-portrait" aria-hidden="true" hidden></span>
+      <div class="guidance-text">
+        <strong id="companion-name" hidden></strong>
+        <p id="explore-tip">森をたんけんしてみよう！</p>
+      </div>
+    </div>
+  </aside>
   <div id="home-feedback">
     <aside id="favorite-summary" aria-label="お気に入りのモリル" role="status" aria-live="polite" aria-atomic="true"></aside>
     <p id="home-reaction" role="status" aria-live="polite" aria-atomic="true">モリルを タップしてみよう！</p>
