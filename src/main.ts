@@ -198,8 +198,8 @@ function showBook(open: boolean): void {
   updateScreenTheme();
   if (book) book.hidden = !open;
   if (controls) controls.hidden = open || homeOpen;
-  // While viewing the book, keep "おうちへ" available as a direct destination.
-  if (homeButton) homeButton.hidden = homeOpen;
+  // From home, the book's destination button already goes home; avoid duplicates.
+  if (homeButton) homeButton.hidden = homeOpen || (open && resumeHomeAfterBook);
   if (resetButton) resetButton.hidden = open || homeOpen;
   if (expeditionHud) expeditionHud.hidden = open || homeOpen;
   if (progressLabel) progressLabel.hidden = open || homeOpen;
@@ -207,7 +207,7 @@ function showBook(open: boolean): void {
   if (inspectButton) inspectButton.hidden = open || homeOpen;
 
   if (toggleBook) {
-    toggleBook.textContent = open ? "↩ もどる" : "📖 ずかんをみる";
+    toggleBook.textContent = open ? (resumeHomeAfterBook ? "🏠 おうちへ" : "🌲 森にもどる") : "📖 ずかんをみる";
     toggleBook.setAttribute("aria-expanded", String(open));
   }
   // Keep Phaser's canvas mounted and its parent measurable at all times.
