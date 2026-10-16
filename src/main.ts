@@ -20,6 +20,7 @@ app.innerHTML = `
   <header>
     <h1>🌿 モリルのふしぎ図鑑 <small class="version-label">v1.1</small></h1>
     <div class="header-actions">
+      <a class="prototype-link" href="?view=first-person">主観視点の試作へ</a>
       <button id="toggle-book" type="button" aria-expanded="false" aria-controls="encyclopedia">📖 ずかんをみる</button>
       <button id="go-home" type="button">🏠 おうちへ</button>
       <button id="reset" type="button">別の森へ ↻</button>
