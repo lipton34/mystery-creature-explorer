@@ -11,12 +11,11 @@
 .exploration-hints { min-width: 0; padding: 12px; border: 1px solid #687e70; border-radius: 10px; background: #243b37; overflow-wrap: anywhere; }
 #auto-map { display: block; width: 100%; max-width: 190px; height: auto; background: #132725; }
 .perspective-tools { width: min(100%, 1100px); display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-#view-status { padding-left: 8px; border-left: 3px solid #b8ad7c; font-size: 14px; line-height: 1.6; }
 .perspective-app button { min-height: 44px; border-radius: 8px; background: #d4c59b; }
 .perspective-app button:disabled { opacity: .5; cursor: not-allowed; }
 .perspective-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: min(100%, 390px); flex-shrink: 0; }
 .perspective-actions button { padding: 8px 12px; }
-.perspective-app .prototype-message { margin-top: 10px; font-size: 14px; line-height: 1.8; }
+.perspective-app .prototype-message { font-size: 14px; line-height: 1.8; }
 #tail-replay[hidden] { display: none; }
 .perspective-app footer { text-align: left; }
 .perspective-app #encyclopedia .creature-portrait { width: 65px; height: 65px; }
