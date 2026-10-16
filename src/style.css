@@ -64,3 +64,140 @@ footer { color: #aec3ba; font-size: 12px; text-align: center; }
 
 #inspect { width: min(100%, 260px); background: #b8e6aa; color: #29402f; font-size: 17px; }
 #inspect[hidden] { display: none; }
+
+/* v1.0: readable instructions and clear discovery feedback across devices. */
+.version-label { font-size: 11px; font-weight: 600; opacity: .75; vertical-align: middle; }
+#expedition-hud { width: min(100%, 760px); display: grid; gap: 6px; padding: 11px 14px; border-radius: 12px; background: #254a40; text-align: center; }
+#expedition-hud[hidden] { display: none; }
+#expedition-hud #expedition-status { width: 100%; font-size: 17px; }
+#explore-tip { font-size: 14px; line-height: 1.5; color: #e7f2cf; }
+#discovery-banner { width: min(100%, 760px); display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px 18px; border-radius: 14px; background: #fff1bb; color: #4a4028; border: 2px solid #f9cc74; }
+#discovery-banner[hidden] { display: none; }
+#discovery-icon { font-size: 42px; }
+#discovery-heading { display: block; font-size: clamp(18px, 4.5vw, 24px); }
+#discovery-detail { margin-top: 4px; font-size: 14px; }
+#inspect { min-height: 50px; transition: background-color 120ms ease, transform 120ms ease; }
+#inspect.inspect-ready { background: #ffe5a2; border: 2px solid #fff2ce; transform: scale(1.03); }
+#controls { grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(2, 54px); gap: 6px; }
+#controls button { min-width: 64px; min-height: 54px; }
+footer { width: min(100%, 760px); line-height: 1.6; }
+@media (max-width: 480px) {
+  #app { padding: 10px 8px; gap: 8px; }
+  header { justify-content: center; }
+  .header-actions { justify-content: center; }
+  .header-actions button { font-size: 13px; padding: 10px 12px; }
+  #encyclopedia, #home { padding: 12px; }
+  .home-creature { width: 92px; min-height: 94px; }
+  .home-creature-icon { font-size: 34px; }
+  #discovery-banner { gap: 10px; padding: 10px; }
+  #discovery-icon { font-size: 34px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #inspect { transition: none; transform: none; }
+}
+
+/* v1.0 review updates: map-corner guidance and center-screen celebration. */
+#stage > #expedition-hud {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 3;
+  width: min(45%, 235px);
+  min-height: 96px;
+  padding: 10px 12px;
+  background: rgba(20, 49, 45, .93);
+  color: #fff4d2;
+  border: 2px solid #8ab89a;
+  border-radius: 12px;
+  pointer-events: none;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+}
+#stage > #expedition-hud[hidden] { display: none; }
+#stage > #expedition-hud #expedition-status { font-size: clamp(11px, 2.4vw, 15px); line-height: 1.3; }
+#stage > #expedition-hud #explore-tip { font-size: clamp(11px, 2.1vw, 13px); line-height: 1.4; }
+#inspect:disabled {
+  background: #667e73;
+  color: #dce5d8;
+  opacity: .7;
+  cursor: not-allowed;
+  transform: none;
+}
+#inspect.inspect-ready:not(:disabled) { background: #ffe5a2; opacity: 1; }
+.announcement {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(12, 28, 30, .75);
+}
+.announcement[hidden] { display: none; }
+.announcement-card {
+  width: min(100%, 520px);
+  background: #fff0bd;
+  color: #493c28;
+  border: 5px solid #eccb79;
+  border-radius: 24px;
+  padding: clamp(20px, 6vw, 38px);
+  text-align: center;
+  box-shadow: 0 14px 45px rgba(0, 0, 0, .28);
+}
+.announcement-icon { font-size: clamp(56px, 14vw, 90px); display: block; }
+#announcement-heading { margin: 10px 0; font-size: clamp(22px, 6vw, 34px); line-height: 1.4; }
+#announcement-detail { margin: 0 0 22px; font-size: clamp(15px, 3.4vw, 20px); }
+#announcement-close { min-height: 52px; padding-inline: 35px; background: #93c8a4; }
+@media (max-width: 480px) {
+  #stage > #expedition-hud { top: 5px; left: 5px; width: min(48%, 165px); min-height: 77px; padding: 6px 8px; }
+  #stage > #expedition-hud #expedition-status { font-size: 11px; }
+  #stage > #expedition-hud #explore-tip { font-size: 11px; }
+}
+
+/* Three distinct screen identities: forest, cozy home, and illustrated storybook. */
+#app { transition: background-color 220ms ease; width: 100%; }
+#app[data-screen="forest"] { background: radial-gradient(ellipse at 50% 0%, #295e49 0%, #122d31 70%); }
+#app[data-screen="home"] { background: radial-gradient(ellipse at 50% 0%, #8a6147 0%, #4e392f 65%, #302c30 100%); }
+#app[data-screen="book"] { background: radial-gradient(ellipse at 50% 0%, #6c5685 0%, #37344e 70%); }
+#app[data-screen="home"] header, #app[data-screen="book"] header { color: #fff5e3; }
+#home {
+  background:
+    linear-gradient(0deg, #886440 0%, #886440 21%, transparent 21%),
+    repeating-linear-gradient(90deg, transparent 0 36px, rgba(255,255,255,.06) 36px 39px),
+    linear-gradient(150deg, #dba56c 0%, #c89062 55%, #b57d58 100%);
+  color: #4b3426;
+  border: 5px solid #f4d5a2;
+  box-shadow: inset 0 0 0 5px rgba(121,69,37,.28);
+}
+#home h2 { color: #603b24; text-shadow: 0 2px 0 #ffe3ad; }
+#home p { color: #503827; }
+#home .home-hero { font-size: clamp(60px, 12vw, 92px); filter: drop-shadow(0 8px 3px rgba(94,51,31,.2)); }
+#home .home-decor { font-size: clamp(22px, 5vw, 32px); letter-spacing: .7em; }
+#home .home-creature { border: 3px solid #d3a66d; box-shadow: 0 5px 0 rgba(109,71,43,.2); }
+#home .home-unknown { border-color: #8d8171; }
+#home #home-reaction { color: #5c3b27; }
+#home #start-expedition { background: #a8d59f; border: 3px solid #f1e5b1; }
+#encyclopedia {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 28px, rgba(141,109,65,.09) 28px 29px),
+    linear-gradient(100deg, #d9bc83 0%, #f8ebc4 7%, #fcf0ce 94%, #e0c18d 100%);
+  border: 6px solid #754d75;
+  color: #493b4b;
+  box-shadow: inset 14px 0 13px -8px rgba(115,68,51,.3), inset -14px 0 13px -8px rgba(115,68,51,.22);
+}
+#encyclopedia .book-emblem { font-size: 44px; text-align: center; margin-bottom: 4px; }
+#encyclopedia .book-heading { border-bottom: 3px double #aa8455; padding-bottom: 10px; }
+#encyclopedia .book-heading h2 { color: #684561; }
+#encyclopedia #collection-count { color: #75503b; font-weight: 700; }
+#encyclopedia .creature-card { background: #fff8e7; border: 2px solid #bca27f; box-shadow: 0 4px 0 rgba(117,91,64,.12); }
+#encyclopedia .creature-card.unknown { background: #e0d7c8; color: #726a70; border-style: dashed; }
+#app[data-screen="forest"] #game { border-color: #77a97e; }
+@media (max-width: 480px) {
+  #encyclopedia, #home { border-width: 3px; }
+  #home .home-decor { letter-spacing: .2em; }
+  #encyclopedia .book-emblem { font-size: 30px; }
+}
+@media (prefers-reduced-motion: reduce) { #app { transition: none; } }
