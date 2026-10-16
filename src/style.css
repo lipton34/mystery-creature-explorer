@@ -70,6 +70,7 @@ footer { color: #aec3ba; font-size: 12px; text-align: center; }
 #expedition-hud { width: min(100%, 760px); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); align-items: center; gap: 12px; padding: 8px 12px; border: 2px solid #8ab89a; border-radius: 12px; background: #254a40; text-align: left; }
 #expedition-hud[hidden] { display: none; }
 #expedition-hud #expedition-status { width: 100%; font-size: 14px; text-align: left; }
+#expedition-status > span { display: inline-block; margin-right: 8px; }
 #explore-tip { font-size: 14px; line-height: 1.5; color: #e7f2cf; }
 #discovery-banner { width: min(100%, 760px); display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px 18px; border-radius: 14px; background: #fff1bb; color: #4a4028; border: 2px solid #f9cc74; }
 #discovery-banner[hidden] { display: none; }
