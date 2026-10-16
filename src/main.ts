@@ -4,14 +4,17 @@ import { createWorld, encounterAt, hiddenEncounterNear, nearbySearchSpot, isWalk
 import { loadCollection, recordDiscovery } from "./collection";
 import { CREATURES, findCreature } from "./creatures";
 import { renderEncyclopedia } from "./encyclopedia";
-import { drawAnimatedCreature, drawDiscoverySparkles } from "./visuals";
+import { drawDiscoverySparkles, drawForestTile } from "./visuals";
+import { CREATURE_ART, createCreaturePortrait } from "./creature-art";
+import explorerArt from "./art/explorer.svg?url&no-inline";
+import cottageArt from "./art/cottage.svg?url";
 import { expeditionProgress, isExpeditionComplete } from "./expedition";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app is missing");
 app.innerHTML = `
   <header>
-    <h1>🌿 ふしぎな迷宮図鑑 <small class="version-label">v1.0</small></h1>
+    <h1>🌿 ふしぎな迷宮図鑑 <small class="version-label">v1.1</small></h1>
     <div class="header-actions">
       <button id="toggle-book" type="button" aria-expanded="false" aria-controls="encyclopedia">📖 ずかんをみる</button>
       <button id="go-home" type="button">🏠 おうちへ</button>
@@ -30,8 +33,7 @@ app.innerHTML = `
     <div id="encyclopedia-grid"></div>
   </section>
   <section id="home" class="overlay-panel" aria-label="生き物のおうち">
-    <div class="home-hero" aria-hidden="true">🏡</div>
-    <div class="home-decor" aria-hidden="true">🪴　🪟　🪴</div>
+    <div class="home-hero" aria-hidden="true"><img src="${cottageArt}" width="240" height="130" alt=""></div>
     <h2>いきもののおうち</h2>
     <p>みつけた なかまたちが まっているよ！</p>
     <div id="home-creatures" class="home-creatures"></div>
@@ -141,7 +143,8 @@ function renderHome(): void {
       button.addEventListener("animationend", () => button.classList.remove("is-reacting"));
     }
     const icon = document.createElement("span");
-    icon.textContent = unlocked ? creature.icon : "？";
+    if (unlocked) icon.append(createCreaturePortrait(creature.id));
+    else icon.textContent = "？";
     icon.className = "home-creature-icon";
     const label = document.createElement("span");
     label.textContent = unlocked ? creature.name : "まだ いないよ";
@@ -235,11 +238,19 @@ class ForestScene extends Phaser.Scene {
   private lastFrameAt = 0;
   private sparkle?: { position: Point; startMs: number };
   private stepsWithoutDiscovery = 0;
+  private creatureSprites: Phaser.GameObjects.Image[] = [];
+  private playerSprite!: Phaser.GameObjects.Image;
 
   constructor() { super("Forest"); }
 
+  preload(): void {
+    for (const creature of CREATURES) this.load.svg(creature.id, CREATURE_ART[creature.id], { width: 80, height: 80 });
+    this.load.svg("explorer", explorerArt, { width: 80, height: 80 });
+  }
+
   create(): void {
     this.graphics = this.add.graphics();
+    this.playerSprite = this.add.image(0, 0, "explorer").setDisplaySize(38, 38).setDepth(2);
     this.newForest();
     inspectButton?.addEventListener("click", () => this.inspect());
     startNewExpedition = () => this.newForest();
@@ -300,6 +311,10 @@ class ForestScene extends Phaser.Scene {
 
   private newForest(): void {
     this.world = createWorld();
+    for (const sprite of this.creatureSprites) sprite.destroy();
+    this.creatureSprites = this.world.encounters.map((encounter) =>
+      this.add.image(0, 0, encounter.id).setDisplaySize(38, 38).setDepth(1),
+    );
     this.heldDirection = null;
     this.sparkle = undefined;
     this.stepsWithoutDiscovery = 0;
@@ -350,6 +365,7 @@ class ForestScene extends Phaser.Scene {
       isNew ? "ずかんに あたらしく とうろくしたよ！" : "こんかいの森でも はっけん！",
       completed ? () => showAnnouncement("🎉", "この森の いきものを ぜんぶ みつけた！", "おめでとう！ おうちへ かえってもいいし、森を あるいてもいいよ！") : undefined,
     );
+    announcementIcon?.replaceChildren(createCreaturePortrait(creature.id));
     this.heldDirection = null;
     this.stepsWithoutDiscovery = 0;
     say(isNew ? `✨ ${creature.name}を はっけん！ ずかんに とうろくしたよ！` : `🌟 ${creature.name}を はっけん！ （ずかん とうろくずみ）`);
@@ -381,23 +397,15 @@ class ForestScene extends Phaser.Scene {
     g.clear();
     for (let y = 0; y < MAP_HEIGHT; y++) {
       for (let x = 0; x < MAP_WIDTH; x++) {
-        const wall = this.world.tiles[y][x] === 1;
-        const shade = (x * 13 + y * 7) % 5 === 0;
-        g.fillStyle(wall ? 0x32564a : shade ? 0x426b56 : 0x4b765c);
-        g.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE - 1, TILE_SIZE - 1);
-        if (wall) {
-          g.fillStyle(0x214339);
-          g.fillCircle(x * TILE_SIZE + 20, y * TILE_SIZE + 19, 15);
-          g.fillStyle(0x5d9270);
-          g.fillCircle(x * TILE_SIZE + 16, y * TILE_SIZE + 14, 10);
-        } else if ((x * 11 + y * 17) % 19 === 0) {
-          g.fillStyle(0x9cbd79);
-          g.fillCircle(x * TILE_SIZE + 26, y * TILE_SIZE + 27, 3);
-        }
+        drawForestTile(g, { x, y }, this.world.tiles[y][x] === 1);
       }
     }
-    for (const encounter of this.world.encounters) {
+    for (const [index, encounter] of this.world.encounters.entries()) {
       const creature = findCreature(encounter.id);
+      const sprite = this.creatureSprites[index];
+      const bob = Math.sin(this.time.now / 1000 * (encounter.id === "pufflet" ? 2.9 : 3.6) + encounter.position.x) * 2;
+      sprite.setPosition(encounter.position.x * TILE_SIZE + 20, encounter.position.y * TILE_SIZE + 19 + bob);
+      sprite.setVisible(!encounter.hidden || encounter.discovered);
       if (encounter.hidden && !encounter.discovered) {
         const bx = encounter.position.x * TILE_SIZE + 20;
         const by = encounter.position.y * TILE_SIZE + 23;
@@ -424,20 +432,15 @@ class ForestScene extends Phaser.Scene {
           g.fillStyle(0xf9e6a0);
           g.fillCircle(bx + 11, by - 9, 3);
         }
-      } else if (creature) drawAnimatedCreature(g, creature, encounter.position, this.time.now / 1000);
+      } else if (creature) {
+        g.fillStyle(0x365848, 0.25);
+        g.fillEllipse(encounter.position.x * TILE_SIZE + 20, encounter.position.y * TILE_SIZE + 36, 26, 5);
+      }
     }
     const p = this.world.player;
     g.fillStyle(0x213c3f);
     g.fillEllipse(p.x * TILE_SIZE + 20, p.y * TILE_SIZE + 33, 23, 8);
-    g.fillStyle(0xf2ce9b);
-    g.fillCircle(p.x * TILE_SIZE + 20, p.y * TILE_SIZE + 19, 12);
-    g.fillStyle(0x577db4);
-    g.fillRect(p.x * TILE_SIZE + 10, p.y * TILE_SIZE + 27, 20, 9);
-    g.fillStyle(0x704c3b);
-    g.fillEllipse(p.x * TILE_SIZE + 20, p.y * TILE_SIZE + 11, 25, 10);
-    g.fillStyle(0x292c2b);
-    g.fillCircle(p.x * TILE_SIZE + 16, p.y * TILE_SIZE + 19, 1.5);
-    g.fillCircle(p.x * TILE_SIZE + 24, p.y * TILE_SIZE + 19, 1.5);
+    this.playerSprite.setPosition(p.x * TILE_SIZE + 20, p.y * TILE_SIZE + 20);
     if (this.sparkle) {
       const elapsed = this.time.now - this.sparkle.startMs;
       if (elapsed < 1050) drawDiscoverySparkles(g, this.sparkle.position, elapsed);

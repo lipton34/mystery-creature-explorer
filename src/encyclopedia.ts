@@ -1,5 +1,6 @@
 import { loadCollection } from "./collection";
 import { CREATURES } from "./creatures";
+import { createCreaturePortrait } from "./creature-art";
 
 export function renderEncyclopedia(): void {
   const grid = document.querySelector<HTMLElement>("#encyclopedia-grid");
@@ -14,7 +15,8 @@ export function renderEncyclopedia(): void {
     card.className = "creature-card" + (found ? "" : " unknown");
     const icon = document.createElement("div");
     icon.className = "creature-icon";
-    icon.textContent = found ? creature.icon : "？";
+    if (found) icon.append(createCreaturePortrait(creature.id));
+    else icon.textContent = "？";
     const name = document.createElement("h3");
     name.textContent = found ? creature.name : "？？？";
     const detail = document.createElement("p");
