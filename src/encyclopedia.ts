@@ -20,7 +20,7 @@ export function renderEncyclopedia(): void {
     const name = document.createElement("h3");
     name.textContent = found ? creature.name : "？？？";
     const detail = document.createElement("p");
-    detail.textContent = found ? creature.description : "まだ あっていない いきもの";
+    detail.textContent = found ? creature.description : "まだ あっていない モリル";
     card.append(icon, name, detail);
     grid.append(card);
   });

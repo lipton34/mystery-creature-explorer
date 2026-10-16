@@ -14,7 +14,7 @@ const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app is missing");
 app.innerHTML = `
   <header>
-    <h1>🌿 ふしぎな迷宮図鑑 <small class="version-label">v1.1</small></h1>
+    <h1>🌿 モリルのふしぎ図鑑 <small class="version-label">v1.1</small></h1>
     <div class="header-actions">
       <button id="toggle-book" type="button" aria-expanded="false" aria-controls="encyclopedia">📖 ずかんをみる</button>
       <button id="go-home" type="button">🏠 おうちへ</button>
@@ -27,20 +27,21 @@ app.innerHTML = `
     <p id="expedition-status" aria-live="polite"></p>
     <p id="explore-tip" aria-live="polite">森をたんけんしてみよう！</p>
   </aside>
-  <section id="encyclopedia" aria-label="生き物図鑑" hidden>
+  <section id="encyclopedia" aria-label="モリルの図鑑" hidden>
     <div class="book-emblem" aria-hidden="true">📚</div>
-    <div class="book-heading"><h2>📖 いきものずかん</h2><span id="collection-count"></span></div>
+    <div class="book-heading"><h2>📖 モリルのずかん</h2><span id="collection-count"></span></div>
     <div id="encyclopedia-grid"></div>
   </section>
-  <section id="home" class="overlay-panel" aria-label="生き物のおうち">
+  <section id="home" class="overlay-panel" aria-label="モリルのおうち">
     <div class="home-hero" aria-hidden="true"><img src="${cottageArt}" width="240" height="130" alt=""></div>
-    <h2>いきもののおうち</h2>
+    <h2>モリルのおうち</h2>
+    <p>モリルは 森にくらす ふしぎな なかまたち。</p>
     <p>みつけた なかまたちが まっているよ！</p>
     <div id="home-creatures" class="home-creatures"></div>
-    <p id="home-reaction" role="status" aria-live="polite">なかまを タップしてみよう！</p>
     <button id="start-expedition" type="button">🌲 あたらしい森へ！</button>
   </section>
   </main>
+  <p id="home-reaction" role="status" aria-live="polite" aria-atomic="true">モリルを タップしてみよう！</p>
   <div id="announcement" class="announcement" role="dialog" aria-modal="true" aria-labelledby="announcement-heading" hidden>
     <div class="announcement-card">
       <span id="announcement-icon" class="announcement-icon" aria-hidden="true">✨</span>
@@ -50,7 +51,7 @@ app.innerHTML = `
     </div>
   </div>
   <button id="inspect" type="button" aria-label="まわりをしらべる">🔎 しらべる</button>
-  <p id="message" role="status" aria-live="polite">森を歩いて、ふしぎな生き物を見つけよう！</p>
+  <p id="message" role="status" aria-live="polite">森を歩いて、モリルを見つけよう！</p>
   <div id="controls" aria-label="移動操作">
     <button data-direction="up" aria-label="上へ">▲</button>
     <button data-direction="left" aria-label="左へ">◀</button>
@@ -121,6 +122,10 @@ function renderHome(): void {
   const grid = document.querySelector<HTMLElement>("#home-creatures");
   if (!grid) return;
   grid.replaceChildren();
+  if (homeReaction) {
+    homeReaction.textContent = "モリルを タップしてみよう！";
+    homeReaction.classList.remove("is-updated");
+  }
   const found = new Set(loadCollection());
   for (const creature of CREATURES) {
     const unlocked = found.has(creature.id);
@@ -133,12 +138,20 @@ function renderHome(): void {
       button.addEventListener("click", () => {
         const options = reactions[creature.id] ?? [creature.name + "は うれしそう！"];
         const index = reactionIndex.get(creature.id) ?? 0;
-        if (homeReaction) homeReaction.textContent = options[index % options.length];
+        grid.querySelector(".is-selected")?.classList.remove("is-selected");
+        button.classList.add("is-selected");
+        if (homeReaction) {
+          const text = document.createElement("span");
+          text.textContent = options[index % options.length];
+          homeReaction.replaceChildren(createCreaturePortrait(creature.id), text);
+          homeReaction.classList.remove("is-updated");
+        }
         reactionIndex.set(creature.id, index + 1);
         // Restart the brief bounce animation after every interaction.
         button.classList.remove("is-reacting");
         void button.offsetWidth;
         button.classList.add("is-reacting");
+        homeReaction?.classList.add("is-updated");
       });
       button.addEventListener("animationend", () => button.classList.remove("is-reacting"));
     }
@@ -176,7 +189,6 @@ function showHome(open: boolean): void {
 
   if (open) {
     renderHome();
-    if (homeReaction) homeReaction.textContent = "なかまを タップしてみよう！";
     say("あたらしい森を たんけんするときは ボタンを おしてね！");
   }
 }
@@ -363,7 +375,7 @@ class ForestScene extends Phaser.Scene {
       creature.icon,
       isNew ? `はじめまして！ ${creature.name}` : `${creature.name}に またあえた！`,
       isNew ? "ずかんに あたらしく とうろくしたよ！" : "こんかいの森でも はっけん！",
-      completed ? () => showAnnouncement("🎉", "この森の いきものを ぜんぶ みつけた！", "おめでとう！ おうちへ かえってもいいし、森を あるいてもいいよ！") : undefined,
+      completed ? () => showAnnouncement("🎉", "この森の モリルを ぜんぶ みつけた！", "おめでとう！ おうちへ かえってもいいし、森を あるいてもいいよ！") : undefined,
     );
     announcementIcon?.replaceChildren(createCreaturePortrait(creature.id));
     this.heldDirection = null;
@@ -376,7 +388,7 @@ class ForestScene extends Phaser.Scene {
     const spot = nearbySearchSpot(this.world, this.world.player);
     if (progressLabel) progressLabel.textContent = `🌿 この森で ${found} / ${total} しゅるい はっけん`;
     const comments = [
-      "どんな いきものが いるかな？",
+      "どんな モリルが いるかな？",
       "あわてず ゆっくり たんけんしよう！",
       "くさむらや いしも みてみよう！",
       "まだ みぬ なかまが いるかも！",
