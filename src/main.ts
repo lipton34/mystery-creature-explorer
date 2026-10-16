@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import "./style.css";
 import { createWorld, encounterAt, hiddenEncounterNear, nearbySearchSpot, isWalkable, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Point, type World } from "./world";
 import { loadCollection, recordDiscovery } from "./collection";
+import { loadFavorite, selectFavorite } from "./favorite";
 import { CREATURES, findCreature } from "./creatures";
 import { renderEncyclopedia } from "./encyclopedia";
 import { drawDiscoverySparkles, drawForestTile } from "./visuals";
@@ -41,7 +42,10 @@ app.innerHTML = `
     <button id="start-expedition" type="button">🌲 あたらしい森へ！</button>
   </section>
   </main>
-  <p id="home-reaction" role="status" aria-live="polite" aria-atomic="true">モリルを タップしてみよう！</p>
+  <div id="home-feedback">
+    <aside id="favorite-summary" aria-label="お気に入りのモリル" role="status" aria-live="polite" aria-atomic="true"></aside>
+    <p id="home-reaction" role="status" aria-live="polite" aria-atomic="true">モリルを タップしてみよう！</p>
+  </div>
   <div id="announcement" class="announcement" role="dialog" aria-modal="true" aria-labelledby="announcement-heading" hidden>
     <div class="announcement-card">
       <span id="announcement-icon" class="announcement-icon" aria-hidden="true">✨</span>
@@ -118,6 +122,26 @@ function updateScreenTheme(): void {
   if (!app) return;
   app.dataset.screen = bookOpen ? "book" : homeOpen ? "home" : "forest";
 }
+function renderFavorite(notice?: string): void {
+  const favorite = findCreature(loadFavorite() ?? "");
+  const summary = document.querySelector<HTMLElement>("#favorite-summary");
+  if (summary) {
+    const heading = document.createElement("strong");
+    heading.textContent = favorite ? `⭐ おきにいり：${favorite.name}` : "⭐ おきにいりは まだ えらんでいないよ";
+    const note = document.createElement("p");
+    note.textContent = notice ?? (favorite ? "ほかの モリルにも かえられるよ！" : "みつけた モリルの「☆ えらぶ」を おしてね。");
+    const text = document.createElement("div");
+    text.append(heading, note);
+    summary.replaceChildren();
+    if (favorite) summary.append(createCreaturePortrait(favorite.id));
+    summary.append(text);
+  }
+  document.querySelectorAll<HTMLButtonElement>("[data-favorite-id]").forEach((button) => {
+    const selected = button.dataset.favoriteId === favorite?.id;
+    button.setAttribute("aria-pressed", String(selected));
+    button.textContent = selected ? "⭐ おきにいり" : "☆ えらぶ";
+  });
+}
 function renderHome(): void {
   const grid = document.querySelector<HTMLElement>("#home-creatures");
   if (!grid) return;
@@ -162,8 +186,26 @@ function renderHome(): void {
     const label = document.createElement("span");
     label.textContent = unlocked ? creature.name : "まだ いないよ";
     tile.append(icon, label);
-    grid.append(tile);
+    if (unlocked) {
+      const choice = document.createElement("div");
+      choice.className = "home-creature-choice";
+      const favoriteButton = document.createElement("button");
+      favoriteButton.type = "button";
+      favoriteButton.className = "favorite-button";
+      favoriteButton.dataset.favoriteId = creature.id;
+      favoriteButton.setAttribute("aria-label", creature.name + "を おきにいりにする");
+      favoriteButton.addEventListener("click", () => {
+        const result = selectFavorite(creature.id);
+        if (result === "unavailable") return;
+        renderFavorite(result === "session-only"
+          ? "この画面を とじると、おきにいりを わすれてしまうかも。"
+          : `${creature.name}に きめた！`);
+      });
+      choice.append(tile, favoriteButton);
+      grid.append(choice);
+    } else grid.append(tile);
   }
+  renderFavorite();
 }
 function showHome(open: boolean): void {
   // The home button is also available from the encyclopedia.
