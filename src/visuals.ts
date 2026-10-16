@@ -36,6 +36,30 @@ export function drawForestTile(g: Phaser.GameObjects.Graphics, point: Point, wal
   }
 }
 
+export function drawForestTreasure(g: Phaser.GameObjects.Graphics, point: Point): void {
+  const centerX = point.x * TILE_SIZE + 20;
+  const centerY = point.y * TILE_SIZE + 22;
+  g.fillStyle(0x365848, 0.2);
+  g.fillEllipse(centerX, centerY + 9, 25, 6);
+  g.fillStyle(0xffe38a);
+  g.beginPath();
+  g.moveTo(centerX - 13, centerY + 8);
+  g.lineTo(centerX - 10, centerY - 3);
+  g.lineTo(centerX - 3, centerY - 8);
+  g.lineTo(centerX + 13, centerY - 8);
+  g.lineTo(centerX + 10, centerY + 3);
+  g.lineTo(centerX + 3, centerY + 8);
+  g.closePath();
+  g.fillPath();
+  g.lineStyle(2, 0x98703c);
+  g.strokePath();
+  g.lineBetween(centerX - 15, centerY + 10, centerX + 9, centerY - 5);
+  g.lineBetween(centerX - 2, centerY + 2, centerX - 4, centerY - 4);
+  g.lineStyle(2, 0xfff9e9);
+  g.lineBetween(centerX + 12, centerY - 15, centerX + 12, centerY - 7);
+  g.lineBetween(centerX + 8, centerY - 11, centerX + 16, centerY - 11);
+}
+
 export function drawDiscoverySparkles(
   g: Phaser.GameObjects.Graphics,
   point: Point,

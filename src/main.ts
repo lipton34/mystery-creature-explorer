@@ -5,7 +5,7 @@ import { loadCollection, recordDiscovery } from "./collection";
 import { clearFavorite, loadFavorite, selectFavorite } from "./favorite";
 import { CREATURES, findCreature } from "./creatures";
 import { renderEncyclopedia } from "./encyclopedia";
-import { drawDiscoverySparkles, drawForestTile } from "./visuals";
+import { drawDiscoverySparkles, drawForestTile, drawForestTreasure } from "./visuals";
 import { CREATURE_ART, createCreaturePortrait } from "./creature-art";
 import explorerArt from "./art/explorer.svg?url&no-inline";
 import cottageArt from "./art/cottage.svg?url";
@@ -13,6 +13,7 @@ import { expeditionProgress, isExpeditionComplete } from "./expedition";
 import { explorationGuidance, SPOT_LABELS } from "./exploration-guidance";
 import { findWalkPath, mapPointAt } from "./navigation";
 import { walkingPosition, WALK_DURATION_MS, type WalkingStep } from "./walking";
+import { collectTreasure, createForestTreasure, treasureNear, type ForestTreasure } from "./treasure";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app is missing");
@@ -43,7 +44,7 @@ app.innerHTML = `
   </main>
   <div id="exploration-toolbar">
   <aside id="expedition-hud" aria-label="探索のヒント">
-    <p id="expedition-status" aria-live="polite"></p>
+    <p id="expedition-status" aria-live="polite"><span id="creature-progress"></span><span id="treasure-progress"></span></p>
     <div id="exploration-guidance" aria-live="polite" aria-atomic="true">
       <span id="companion-portrait" aria-hidden="true" hidden></span>
       <div class="guidance-text">
@@ -92,6 +93,8 @@ const home = document.querySelector<HTMLElement>("#home");
 const homeButton = document.querySelector<HTMLButtonElement>("#go-home");
 const resetButton = document.querySelector<HTMLButtonElement>("#reset");
 const progressLabel = document.querySelector<HTMLElement>("#expedition-status");
+const creatureProgress = document.querySelector<HTMLElement>("#creature-progress");
+const treasureProgress = document.querySelector<HTMLElement>("#treasure-progress");
 const expeditionHud = document.querySelector<HTMLElement>("#expedition-hud");
 const exploreTip = document.querySelector<HTMLElement>("#explore-tip");
 const companionPortrait = document.querySelector<HTMLElement>("#companion-portrait");
@@ -307,6 +310,7 @@ const MOVES: Record<Direction, Point> = {
 
 class ForestScene extends Phaser.Scene {
   private world!: World;
+  private treasure?: ForestTreasure;
   private graphics!: Phaser.GameObjects.Graphics;
   private keyHandler?: (event: KeyboardEvent) => void;
   private heldDirection: Direction | null = null;
@@ -511,6 +515,7 @@ class ForestScene extends Phaser.Scene {
     this.stopMovement();
     this.walkingStep = undefined;
     this.world = createWorld();
+    this.treasure = createForestTreasure(this.world);
     this.companion = loadFavorite();
     const companion = findCreature(this.companion ?? "");
     if (companionPortrait) {
@@ -534,7 +539,7 @@ class ForestScene extends Phaser.Scene {
     if (announcement) announcement.hidden = true;
     this.updateExpeditionProgress();
     const found = loadCollection().length;
-    say(found ? `新しい森に到着！ 図鑑は ${found}/${CREATURES.length} しゅるい はっけんずみ。きになる ばしょを しらべてみよう！` : "ふしぎな森へようこそ！ きになる ばしょを しらべてみよう！");
+    say(found ? `新しい森に到着！ 図鑑は ${found}/${CREATURES.length} しゅるい はっけんずみ。きらきらの はっぱも しらべてみよう！` : "ふしぎな森へようこそ！ モリルと きらきらの はっぱを さがしてみよう！");
     this.renderWorld();
     if (bookOpen) renderEncyclopedia();
   }
@@ -587,6 +592,14 @@ class ForestScene extends Phaser.Scene {
       return;
     }
     const encounter = hiddenEncounterNear(this.world, this.world.player);
+    if (!encounter && this.treasure && collectTreasure(this.treasure, this.world.player)) {
+      this.sparkle = { position: { ...this.treasure.position }, startMs: this.time.now };
+      this.updateExpeditionProgress();
+      showAnnouncement("🍃", "きんいろの はっぱを みつけた！", "この森だけの たからものだよ！ あたらしい森では また さがせるよ。");
+      say("🍃 この森の たからものを みつけたよ！ あたらしい森では また さがせるよ。");
+      this.renderWorld();
+      return;
+    }
     if (!encounter) {
       say("このあたりには なにも ないみたい。🌿 きになる ばしょを さがしてみよう！");
       return;
@@ -618,15 +631,20 @@ class ForestScene extends Phaser.Scene {
   private updateExpeditionProgress(): void {
     const { found, total } = expeditionProgress(this.world.encounters);
     const spot = nearbySearchSpot(this.world, this.world.player);
-    if (progressLabel) progressLabel.textContent = `🌿 この森で ${found} / ${total} しゅるい はっけん`;
+    const nearTreasure = treasureNear(this.treasure, this.world.player);
+    const canInspect = Boolean(spot) || nearTreasure;
+    const progressText = `🌿 この森の モリル ${found}/${total}`;
+    const treasureText = this.treasure ? `🍃 たからもの ${this.treasure.collected ? 1 : 0}/1` : "";
+    if (creatureProgress && creatureProgress.textContent !== progressText) creatureProgress.textContent = progressText;
+    if (treasureProgress && treasureProgress.textContent !== treasureText) treasureProgress.textContent = treasureText;
     if (exploreTip) {
-      const tip = explorationGuidance(this.companion, this.stepsWithoutDiscovery, spot);
+      const tip = !spot && nearTreasure ? "きらきらを しらべてみよう！" : explorationGuidance(this.companion, this.stepsWithoutDiscovery, spot);
       if (exploreTip.textContent !== tip) exploreTip.textContent = tip;
     }
     if (inspectButton) {
-      inspectButton.disabled = !spot || announcementOpen || Boolean(this.walkingStep);
-      inspectButton.classList.toggle("inspect-ready", Boolean(spot));
-      inspectButton.setAttribute("aria-label", spot ? `${SPOT_LABELS[spot]}を しらべる` : "まわりをしらべる");
+      inspectButton.disabled = !canInspect || announcementOpen || Boolean(this.walkingStep);
+      inspectButton.classList.toggle("inspect-ready", canInspect);
+      inspectButton.setAttribute("aria-label", spot ? `${SPOT_LABELS[spot]}を しらべる` : nearTreasure ? "きらきらを しらべる" : "まわりをしらべる");
     }
   }
 
@@ -639,6 +657,7 @@ class ForestScene extends Phaser.Scene {
       }
     }
     const destination = this.walkPath.at(-1);
+    if (this.treasure && !this.treasure.collected) drawForestTreasure(g, this.treasure.position);
     if (destination) {
       g.lineStyle(2, 0xffe5a2);
       g.strokeRoundedRect(destination.x * TILE_SIZE + 3, destination.y * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6, 8);
