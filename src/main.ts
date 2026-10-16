@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import "./style.css";
 import { createWorld, encounterAt, hiddenEncounterNear, nearbySearchSpot, isWalkable, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Point, type World } from "./world";
 import { loadCollection, recordDiscovery } from "./collection";
-import { loadFavorite, selectFavorite } from "./favorite";
+import { clearFavorite, loadFavorite, selectFavorite } from "./favorite";
 import { CREATURES, findCreature } from "./creatures";
 import { renderEncyclopedia } from "./encyclopedia";
 import { drawDiscoverySparkles, drawForestTile } from "./visuals";
@@ -12,6 +12,7 @@ import cottageArt from "./art/cottage.svg?url";
 import { expeditionProgress, isExpeditionComplete } from "./expedition";
 import { explorationGuidance, SPOT_LABELS } from "./exploration-guidance";
 import { findWalkPath, mapPointAt } from "./navigation";
+import { walkingPosition, WALK_DURATION_MS, type WalkingStep } from "./walking";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app is missing");
@@ -146,7 +147,7 @@ function renderFavorite(notice?: string): void {
     const heading = document.createElement("strong");
     heading.textContent = favorite ? `⭐ おきにいり：${favorite.name}` : "⭐ おきにいりは まだ えらんでいないよ";
     const note = document.createElement("p");
-    note.textContent = notice ?? (favorite ? "ほかの モリルにも かえられるよ！" : "みつけた モリルの「☆ えらぶ」を おしてね。");
+    note.textContent = notice ?? (favorite ? "⭐を もういちど おすと はずせるよ！" : "みつけた モリルの「☆ えらぶ」を おしてね。");
     const text = document.createElement("div");
     text.append(heading, note);
     summary.replaceChildren();
@@ -156,7 +157,9 @@ function renderFavorite(notice?: string): void {
   document.querySelectorAll<HTMLButtonElement>("[data-favorite-id]").forEach((button) => {
     const selected = button.dataset.favoriteId === favorite?.id;
     button.setAttribute("aria-pressed", String(selected));
-    button.textContent = selected ? "⭐ おきにいり" : "☆ えらぶ";
+    button.textContent = selected ? "⭐ はずす" : "☆ えらぶ";
+    const creature = findCreature(button.dataset.favoriteId ?? "");
+    button.setAttribute("aria-label", `${creature?.name ?? "モリル"}を おきにいり${selected ? "から はずす" : "にする"}`);
   });
 }
 function renderHome(): void {
@@ -212,11 +215,12 @@ function renderHome(): void {
       favoriteButton.dataset.favoriteId = creature.id;
       favoriteButton.setAttribute("aria-label", creature.name + "を おきにいりにする");
       favoriteButton.addEventListener("click", () => {
-        const result = selectFavorite(creature.id);
+        const removing = loadFavorite() === creature.id;
+        const result = removing ? clearFavorite() : selectFavorite(creature.id);
         if (result === "unavailable") return;
         renderFavorite(result === "session-only"
-          ? "この画面を とじると、おきにいりを わすれてしまうかも。"
-          : `${creature.name}に きめた！`);
+          ? removing ? "この画面では はずしたよ。つぎは おきにいりに もどるかも。" : "この画面を とじると、おきにいりを わすれてしまうかも。"
+          : removing ? "おきにいりを はずしたよ！" : `${creature.name}に きめた！`);
       });
       choice.append(tile, favoriteButton);
       grid.append(choice);
@@ -312,6 +316,12 @@ class ForestScene extends Phaser.Scene {
   private stepsWithoutDiscovery = 0;
   private creatureSprites: Phaser.GameObjects.Image[] = [];
   private playerSprite!: Phaser.GameObjects.Image;
+  private playerShadow!: Phaser.GameObjects.Ellipse;
+  private walkingStep?: WalkingStep;
+  private queuedDirection?: Direction;
+  private inspectOnArrival = false;
+  private announceArrival = false;
+  private reduceMotion = false;
   private companion: ReturnType<typeof loadFavorite> = null;
   private walkPath: Point[] = [];
   private lastPathMoveAt = 0;
@@ -326,12 +336,14 @@ class ForestScene extends Phaser.Scene {
 
   create(): void {
     this.graphics = this.add.graphics();
+    this.playerShadow = this.add.ellipse(0, 0, 23, 8, 0x213c3f).setDepth(1);
     this.playerSprite = this.add.image(0, 0, "explorer").setDisplaySize(38, 38).setDepth(2);
+    this.reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     this.newForest();
     inspectButton?.addEventListener("click", () => this.inspect());
     startNewExpedition = () => this.newForest();
     stopExplorationMovement = () => {
-      if (this.walkPath.length) say("ここで とまるよ。");
+      if (this.walkPath.length || this.walkingStep) say("ここで とまるよ。");
       this.stopMovement();
     };
     const canvas = this.game.canvas;
@@ -340,7 +352,8 @@ class ForestScene extends Phaser.Scene {
     const pointerDown = (event: PointerEvent) => {
       if (!event.isPrimary || event.button !== 0 || bookOpen || homeOpen || announcementOpen) return;
       const point = mapPointAt({ x: event.clientX, y: event.clientY }, canvas.getBoundingClientRect());
-      if (point?.x === this.world.player.x && point.y === this.world.player.y) {
+      const pose = this.walkingStep ? walkingPosition(this.walkingStep, this.time.now) : this.world.player;
+      if (point?.x === Math.floor(pose.x + 0.5) && point.y === Math.floor(pose.y + 0.5)) {
         this.stopMovement();
         say("ここで とまるよ。");
         return;
@@ -356,10 +369,12 @@ class ForestScene extends Phaser.Scene {
       if (!destination) return;
       canvas.focus({ preventScroll: true });
       this.stopMovement();
-      this.walkPath = findWalkPath(this.world, destination);
-      this.lastPathMoveAt = this.time.now - 160;
+      const origin = this.walkingStep?.to ?? this.world.player;
+      this.walkPath = findWalkPath({ ...this.world, player: origin }, destination);
+      this.announceArrival = this.walkPath.length > 0;
+      this.lastPathMoveAt = this.time.now - WALK_DURATION_MS;
       say(this.walkPath.length ? "しるしの ばしょへ あるくよ！ じぶんを タップすると とまるよ。"
-        : destination.x === this.world.player.x && destination.y === this.world.player.y ? "ここで とまるよ。" : "そこへは いけないみたい。みちを タップしてね。");
+        : destination.x === origin.x && destination.y === origin.y ? "ここで とまるよ。" : "そこへは いけないみたい。みちを タップしてね。");
       this.renderWorld();
     };
     const cancelPointer = () => { this.pointerStart = undefined; };
@@ -439,19 +454,38 @@ class ForestScene extends Phaser.Scene {
   }
 
   update(time: number): void {
+    this.updateWalking(time);
     if (bookOpen || homeOpen || announcementOpen) {
       this.stopMovement();
       return;
+    }
+    if (!this.walkingStep) {
+      const encounter = encounterAt(this.world, this.world.player);
+      if (encounter) {
+        this.discover(encounter);
+        this.renderWorld();
+        return;
+      }
+      if (this.inspectOnArrival) {
+        this.inspectOnArrival = false;
+        this.inspect();
+        return;
+      }
+      if (this.queuedDirection) {
+        const direction = this.queuedDirection;
+        this.queuedDirection = undefined;
+        this.move(direction);
+      }
     }
     if (time - this.lastFrameAt >= 50) {
       this.lastFrameAt = time;
       this.renderWorld();
     }
-    if (this.heldDirection && time - this.lastMoveAt >= 160) {
+    if (!this.walkingStep && this.heldDirection && time - this.lastMoveAt >= WALK_DURATION_MS) {
       this.lastMoveAt = time;
       this.move(this.heldDirection);
     }
-    if (this.walkPath.length && time - this.lastPathMoveAt >= 160) {
+    if (!this.walkingStep && this.walkPath.length && time - this.lastPathMoveAt >= WALK_DURATION_MS) {
       const next = this.walkPath.shift()!;
       const direction = (Object.keys(MOVES) as Direction[]).find((key) =>
         this.world.player.x + MOVES[key].x === next.x && this.world.player.y + MOVES[key].y === next.y,
@@ -460,7 +494,6 @@ class ForestScene extends Phaser.Scene {
       else {
         this.lastPathMoveAt = time;
         this.move(direction);
-        if (!this.walkPath.length && !announcementOpen) say("とうちゃく！ まわりを みてみよう。");
       }
     }
   }
@@ -469,10 +502,14 @@ class ForestScene extends Phaser.Scene {
     this.heldDirection = null;
     this.walkPath = [];
     this.pointerStart = undefined;
+    this.queuedDirection = undefined;
+    this.inspectOnArrival = false;
+    this.announceArrival = false;
   }
 
   private newForest(): void {
     this.stopMovement();
+    this.walkingStep = undefined;
     this.world = createWorld();
     this.companion = loadFavorite();
     const companion = findCreature(this.companion ?? "");
@@ -504,20 +541,51 @@ class ForestScene extends Phaser.Scene {
 
   private move(direction: Direction): void {
     if (bookOpen || homeOpen || announcementOpen) return;
+    if (this.walkingStep) {
+      this.queuedDirection = direction;
+      return;
+    }
     const vector = MOVES[direction];
     const next = { x: this.world.player.x + vector.x, y: this.world.player.y + vector.y };
     if (!isWalkable(this.world, next)) return;
-    this.world.player = next;
-    this.stepsWithoutDiscovery += 1;
+    this.walkingStep = { from: { ...this.world.player }, to: next, startedAt: this.time.now };
     this.updateExpeditionProgress();
-    const encounter = encounterAt(this.world, next);
-    if (encounter) this.discover(encounter);
     this.renderWorld();
+  }
+
+  private updateWalking(time: number): void {
+    const step = this.walkingStep;
+    if (step && walkingPosition(step, time).progress === 1) {
+      this.world.player = step.to;
+      this.walkingStep = undefined;
+      this.stepsWithoutDiscovery += 1;
+      this.updateExpeditionProgress();
+      if (this.announceArrival && !this.walkPath.length) {
+        this.announceArrival = false;
+        if (!bookOpen && !homeOpen && !announcementOpen && !encounterAt(this.world, this.world.player)) {
+          say("とうちゃく！ まわりを みてみよう。");
+        }
+      }
+    }
+    this.renderPlayer(time);
+  }
+
+  private renderPlayer(time: number): void {
+    const pose = this.walkingStep ? walkingPosition(this.walkingStep, time) : { ...this.world.player, progress: 0 };
+    const lift = this.reduceMotion ? 0 : Math.sin(pose.progress * Math.PI) * 1.5;
+    const center = pose.x * TILE_SIZE + TILE_SIZE / 2;
+    const top = pose.y * TILE_SIZE;
+    this.playerSprite.setPosition(center, top + TILE_SIZE / 2 - lift);
+    this.playerShadow.setPosition(center, top + 33);
   }
 
   private inspect(): void {
     if (bookOpen || homeOpen || announcementOpen) return;
     this.stopMovement();
+    if (this.walkingStep) {
+      this.inspectOnArrival = true;
+      return;
+    }
     const encounter = hiddenEncounterNear(this.world, this.world.player);
     if (!encounter) {
       say("このあたりには なにも ないみたい。🌿 きになる ばしょを さがしてみよう！");
@@ -556,7 +624,7 @@ class ForestScene extends Phaser.Scene {
       if (exploreTip.textContent !== tip) exploreTip.textContent = tip;
     }
     if (inspectButton) {
-      inspectButton.disabled = !spot || announcementOpen;
+      inspectButton.disabled = !spot || announcementOpen || Boolean(this.walkingStep);
       inspectButton.classList.toggle("inspect-ready", Boolean(spot));
       inspectButton.setAttribute("aria-label", spot ? `${SPOT_LABELS[spot]}を しらべる` : "まわりをしらべる");
     }
@@ -612,10 +680,7 @@ class ForestScene extends Phaser.Scene {
         g.fillEllipse(encounter.position.x * TILE_SIZE + 20, encounter.position.y * TILE_SIZE + 36, 26, 5);
       }
     }
-    const p = this.world.player;
-    g.fillStyle(0x213c3f);
-    g.fillEllipse(p.x * TILE_SIZE + 20, p.y * TILE_SIZE + 33, 23, 8);
-    this.playerSprite.setPosition(p.x * TILE_SIZE + 20, p.y * TILE_SIZE + 20);
+    this.renderPlayer(this.time.now);
     if (this.sparkle) {
       const elapsed = this.time.now - this.sparkle.startMs;
       if (elapsed < 1050) drawDiscoverySparkles(g, this.sparkle.position, elapsed);
