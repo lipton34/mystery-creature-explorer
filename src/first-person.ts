@@ -5,6 +5,7 @@ import { renderEncyclopedia } from "./encyclopedia";
 import { applyExplorationAction, canWitnessTail, createPerspectiveState, explorationDestination, FAR_BANK, HEADINGS, inspectionTarget, inspectFootprint, knownMapCells, LOG_APPROACH, PROTOTYPE_MAP, TAIL_HEADING, TAIL_LOOKOUT, terrainAt, type ExplorationAction, type ViewPose } from "./perspective-world";
 import { drawPerspective, VIEW_HEIGHT, VIEW_WIDTH } from "./perspective-renderer";
 import { EXPLORATION_MESSAGES, messageAfterAction } from "./perspective-messages";
+import { SIGHTING_DURATION } from "./moriru-sighting";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app is missing");
@@ -213,8 +214,8 @@ class PerspectiveScene extends Phaser.Scene {
         this.refresh();
       }
     }
-    const tailProgress = this.tailStartedAt === undefined ? undefined : (time - this.tailStartedAt) / 3200;
-    drawPerspective(this.graphics, pose, tailProgress, this.reduceMotion ? 0 : time);
+    const tailProgress = this.tailStartedAt === undefined ? undefined : (time - this.tailStartedAt) / SIGHTING_DURATION;
+    drawPerspective(this.graphics, pose, tailProgress, this.reduceMotion ? 0 : time, this.reduceMotion);
     if (tailProgress !== undefined && tailProgress >= 1) {
       this.tailStartedAt = undefined;
       this.showMessage(EXPLORATION_MESSAGES.afterTail);
