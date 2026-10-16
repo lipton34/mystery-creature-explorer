@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import "./style.css";
 import "./first-person.css";
 import { renderEncyclopedia } from "./encyclopedia";
-import { applyExplorationAction, canWitnessTail, createPerspectiveState, footprintInReach, HEADINGS, inspectFootprint, knownMapCells, type ExplorationAction, type ViewPose } from "./perspective-world";
+import { applyExplorationAction, canWitnessTail, createPerspectiveState, FAR_BANK, FACING_VECTORS, HEADINGS, inspectionTarget, inspectFootprint, knownMapCells, LOG_APPROACH, PROTOTYPE_MAP, TAIL_HEADING, TAIL_LOOKOUT, terrainAt, type ExplorationAction, type ViewPose } from "./perspective-world";
 import { drawPerspective, VIEW_HEIGHT, VIEW_WIDTH } from "./perspective-renderer";
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -10,7 +10,7 @@ if (!app) throw new Error("#app is missing");
 app.className = "perspective-app";
 app.innerHTML = `
   <header>
-    <div><h1>曲がり道のむこう</h1><p class="prototype-label">主観視点・自動マップの体験試作／仮の描画</p></div>
+    <div><h1>木漏れ日の小川</h1><p class="prototype-label">ステージ1・導線の確認版／仮の描画</p></div>
     <div class="header-actions"><button id="prototype-book" type="button" aria-expanded="false" aria-controls="encyclopedia">ずかんをみる</button><button id="prototype-reset" type="button">最初から</button><a href="./">おうちへ</a></div>
   </header>
   <main class="perspective-layout">
@@ -18,7 +18,7 @@ app.innerHTML = `
       <div id="perspective-game" aria-label="主観視点の探索画面"></div>
       <section id="encyclopedia" aria-label="モリルの図鑑" hidden><div class="book-heading"><h2>モリルのずかん</h2><span id="collection-count"></span></div><div id="encyclopedia-grid"></div></section>
     </div>
-    <aside class="map-panel" aria-label="自動で埋まる地図"><h2>歩いた道の記録</h2><canvas id="auto-map" width="176" height="144" role="img" aria-label="自動マップ"></canvas><p>明るいマス：歩いた道<br>暗いマス：まだ知らない場所<br>▲：現在地と向き<br><span id="map-count"></span></p></aside>
+    <aside class="map-panel" aria-label="自動で埋まる地図"><h2>歩いた道の記録</h2><canvas id="auto-map" role="img" aria-label="自動マップ"></canvas><p>明るいマス：歩いた道<br>青緑：近くで見た小川<br>茶色：歩いた倒木<br>暗い場所：未探索<br>▲：現在地と向き<br><span id="map-count"></span></p></aside>
   </main>
   <div class="perspective-tools">
     <p id="view-status" role="status" aria-live="polite"></p>
@@ -26,8 +26,8 @@ app.innerHTML = `
     <button id="prototype-inspect" type="button">調べる</button>
     <button id="tail-replay" type="button" hidden>目撃地点から再生</button>
   </div>
-  <p id="prototype-message" class="prototype-message" role="status" aria-live="polite">この先は、まだ知らない道。足元や曲がり角に目を向けながら、進んでみよう。</p>
-  <footer>矢印キー・W/S：前進／後退、左右キー・A/D：方向転換、Space：調べる。ボタンでも操作できます。地図は移動先の指定には使いません。<br>今回は足跡としっぽの目撃まで。ステージ1の完成版ではありません。探索記録は再読み込みでリセットされ、図鑑・お気に入りは変更しません。</footer>
+  <p id="prototype-message" class="prototype-message" role="status" aria-live="polite">木漏れ日の先から、水の流れる音がする。道を進み、足元や木々の間を見てみよう。</p>
+  <footer>矢印キー・W/S：前進／後退、左右キー・A/D：方向転換、Space：調べる。ボタンでも操作できます。地図は移動先の指定には使いません。<br>今回は川辺の目撃から、渡れる場所を見つけて対岸へ進むまで。大型モリルの全身・発見イベントは未制作です。探索記録は再読み込みでリセットされ、図鑑・お気に入りは変更しません。</footer>
 `;
 
 function element<ElementType extends HTMLElement>(selector: string): ElementType {
@@ -38,6 +38,8 @@ function element<ElementType extends HTMLElement>(selector: string): ElementType
 const status = element("#view-status");
 const message = element("#prototype-message");
 const mapCanvas = element<HTMLCanvasElement>("#auto-map");
+mapCanvas.width = PROTOTYPE_MAP[0].length * 16;
+mapCanvas.height = PROTOTYPE_MAP.length * 16;
 const book = element("#encyclopedia");
 const bookButton = element<HTMLButtonElement>("#prototype-book");
 const inspectButton = element<HTMLButtonElement>("#prototype-inspect");
@@ -47,7 +49,7 @@ const actionButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[
 class PerspectiveScene extends Phaser.Scene {
   private state = createPerspectiveState();
   private graphics!: Phaser.GameObjects.Graphics;
-  private transition?: { from: ViewPose; to: ViewPose; startedAt: number };
+  private transition?: { from: ViewPose; to: ViewPose; startedAt: number; arrivalMessage?: string };
   private tailStartedAt?: number;
   private bookOpen = false;
   private bookOpenedAt = 0;
@@ -63,10 +65,10 @@ class PerspectiveScene extends Phaser.Scene {
     inspectButton.addEventListener("click", () => this.inspect());
     replayButton.addEventListener("click", () => {
       if (this.bookOpen || this.transition || this.tailStartedAt !== undefined) return;
-      this.state.player = { x: 2, y: 4 };
-      this.state.heading = 0;
+      this.state.player = { ...TAIL_LOOKOUT };
+      this.state.heading = TAIL_HEADING;
       this.tailStartedAt = this.time.now;
-      message.textContent = "曲がり角の向こうを、何かのしっぽが横切った……！";
+      message.textContent = "対岸の木々の間を、大きなしっぽが横切った……！";
       this.refresh();
       this.game.canvas.focus({ preventScroll: true });
     });
@@ -78,7 +80,7 @@ class PerspectiveScene extends Phaser.Scene {
       book.hidden = true;
       bookButton.textContent = "ずかんをみる";
       bookButton.setAttribute("aria-expanded", "false");
-      message.textContent = "この先は、まだ知らない道。足元や曲がり角に目を向けながら、進んでみよう。";
+      message.textContent = "木漏れ日の先から、水の流れる音がする。道を進み、足元や木々の間を見てみよう。";
       this.refresh();
       this.game.canvas.focus({ preventScroll: true });
     });
@@ -119,20 +121,37 @@ class PerspectiveScene extends Phaser.Scene {
     if (this.bookOpen || this.transition || this.tailStartedAt !== undefined) return;
     this.game.canvas.focus({ preventScroll: true });
     const from = this.pose();
+    const hadCrossedStream = this.state.crossedStream;
     if (!applyExplorationAction(this.state, action)) {
-      message.textContent = "こちらは木々にふさがれている。向きを変えてみよう。";
+      const direction = FACING_VECTORS[this.state.heading];
+      const sign = action === "backward" ? -1 : 1;
+      const destination = { x: this.state.player.x + direction.x * sign, y: this.state.player.y + direction.y * sign };
+      message.textContent = terrainAt(destination) === "water"
+        ? this.state.crossedStream ? "ここから水には入れない。岸を行き来するときは、見つけた倒木を使おう。" : "流れがあり、ここからは渡れそうにない。川沿いに、向こう岸へ行ける場所はないだろうか。"
+        : "こちらは木々にふさがれている。向きを変えて、道の続く先を見てみよう。";
       return;
     }
     const to = this.pose();
     if (action === "left") to.angle = from.angle - Math.PI / 2;
     if (action === "right") to.angle = from.angle + Math.PI / 2;
-    this.transition = { from, to, startedAt: this.time.now };
+    let arrivalMessage: string | undefined;
+    if (!hadCrossedStream && this.state.crossedStream) arrivalMessage = "太い幹を渡り、向こう岸にたどり着いた！ 木々の向こうに、さっきしっぽを見た川辺がある。";
+    else if (this.state.player.x === FAR_BANK.x && this.state.player.y === FAR_BANK.y) arrivalMessage = "さっき見ていた対岸の川辺に着いた。振り返ると、最初に立っていた岸が見える。今回はここまで。モリルとの出会いは次の段階で作ります。";
+    else if (this.state.player.x === LOG_APPROACH.x && this.state.player.y === LOG_APPROACH.y && this.state.heading === 0) arrivalMessage = "道の先を、大きな倒木がふさいでいる。太い幹は川のほうへ伸びているようだ。";
+    else if (terrainAt(this.state.player) === "log") arrivalMessage = "足元は平らで太い幹。幹が続く先は、川の向こう側だ。";
+    this.transition = { from, to, startedAt: this.time.now, arrivalMessage };
     this.refresh();
   }
 
   private inspect(): void {
     if (this.bookOpen || this.transition || this.tailStartedAt !== undefined) return;
-    if (inspectFootprint(this.state)) message.textContent = "靴がふたつ入りそうな、大きな足跡。丸い指のあとが三つ。次の足跡までも、ずいぶん離れている。どんなモリルが歩いたのだろう？";
+    const target = inspectionTarget(this.state);
+    if (target === "footprint" && inspectFootprint(this.state)) message.textContent = "靴がふたつ入りそうな、大きな足跡。丸い指のあとが三つ。足跡は道の曲がり角へ続いている。どんなモリルが歩いたのだろう？";
+    else if (target === "log") {
+      this.state.inspectedLog = true;
+      message.textContent = "倒れた木の太い幹が、小川をまたいで向こう岸まで続いている。上は平らで、歩いて渡れそうだ。幹の続く方向を見てみよう。";
+    }
+    else if (target === "water") message.textContent = this.state.crossedStream ? "水の向こうに、歩いてきた岸が見える。岸を行き来するときは、見つけた倒木を使おう。" : "透き通っているが、流れのある小川だ。対岸までは跳び越せそうにない。川沿いの景色を見ながら、渡れる場所を探そう。";
     else message.textContent = "今いる場所からは、調べられるものは見当たらない。";
     this.refresh();
     this.game.canvas.focus({ preventScroll: true });
@@ -141,11 +160,13 @@ class PerspectiveScene extends Phaser.Scene {
   private refresh(): void {
     const busy = this.bookOpen || Boolean(this.transition) || this.tailStartedAt !== undefined;
     for (const button of actionButtons) button.disabled = busy;
-    inspectButton.disabled = busy || !footprintInReach(this.state);
-    inspectButton.setAttribute("aria-label", "足跡を調べる");
+    const target = inspectionTarget(this.state);
+    const targetName = target === "footprint" ? "足跡" : target === "log" ? "倒木" : target === "water" ? "小川" : undefined;
+    inspectButton.disabled = busy || !target;
+    inspectButton.setAttribute("aria-label", targetName ? `${targetName}を調べる` : "まわりを調べる");
     replayButton.hidden = !this.state.witnessedTail;
     replayButton.disabled = busy;
-    const text = `${HEADINGS[this.state.heading]}を向いている · ${this.state.inspectedFootprint ? "足跡を調査済み" : footprintInReach(this.state) ? "足元か正面に大きな足跡。調べてみよう。" : "足元と曲がり角を見てみよう。"}`;
+    const text = `${HEADINGS[this.state.heading]}を向いている · ${targetName ? `${targetName}を調べられる` : this.state.crossedStream ? "倒木で対岸へ渡れる" : this.state.witnessedTail ? "川沿いの景色を見てみよう" : "足元と道の先を見てみよう"}`;
     if (status.textContent !== text) status.textContent = text;
     this.drawMap();
   }
@@ -155,8 +176,8 @@ class PerspectiveScene extends Phaser.Scene {
     if (!context) return;
     context.fillStyle = "#132725";
     context.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
-    for (const { position, floor } of knownMapCells(this.state)) {
-      context.fillStyle = floor ? "#b4b89b" : "#42594e";
+    for (const { position, terrain } of knownMapCells(this.state)) {
+      context.fillStyle = terrain === "water" ? "#55aaa9" : terrain === "log" ? "#be9255" : terrain === "path" ? "#b4b89b" : "#42594e";
       context.fillRect(position.x * 16 + 1, position.y * 16 + 1, 14, 14);
     }
     context.save();
@@ -177,23 +198,24 @@ class PerspectiveScene extends Phaser.Scene {
     if (this.transition) {
       const progress = Math.min(1, (time - this.transition.startedAt) / (this.reduceMotion ? 80 : 240));
       const eased = progress * progress * (3 - 2 * progress);
-      const { from, to } = this.transition;
+      const { from, to, arrivalMessage } = this.transition;
       pose = { x: from.x + (to.x - from.x) * eased, y: from.y + (to.y - from.y) * eased, angle: from.angle + (to.angle - from.angle) * eased };
       if (progress === 1) {
         this.transition = undefined;
         if (canWitnessTail(this.state)) {
           this.state.witnessedTail = true;
           this.tailStartedAt = time;
-          message.textContent = "曲がり角の向こうを、何かのしっぽが横切った……！ 全身は木々の向こうに隠れている。";
+          message.textContent = "小川の対岸で、大きなしっぽが木々の間を横切った……！ 向こうへ行けば、姿の主に会えるだろうか。";
         }
+        else if (arrivalMessage) message.textContent = arrivalMessage;
         this.refresh();
       }
     }
     const tailProgress = this.tailStartedAt === undefined ? undefined : (time - this.tailStartedAt) / 3200;
-    drawPerspective(this.graphics, pose, tailProgress);
+    drawPerspective(this.graphics, pose, tailProgress, this.reduceMotion ? 0 : time);
     if (tailProgress !== undefined && tailProgress >= 1) {
       this.tailStartedAt = undefined;
-      message.textContent = "しっぽは曲がり角の奥へ消えた。大きな足跡の主だろうか？ この先に何がいるか、想像してみよう。今回はここまでが体験試作です。道の探索は続けられます。";
+      message.textContent = "しっぽは対岸の木々の奥へ消えた。大きな足跡の主だろうか？ 目の前には小川。向こう岸へ渡れる場所を探してみよう。";
       this.refresh();
     }
   }
