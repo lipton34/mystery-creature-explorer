@@ -23,7 +23,7 @@ export const HEADINGS = ["北", "東", "南", "西"] as const;
 export const FACING_VECTORS: readonly Point[] = [
   { x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 },
 ];
-export type ExplorationAction = "forward" | "backward" | "left" | "right";
+export type ExplorationAction = "forward" | "backward" | "left" | "right" | "strafe-left" | "strafe-right";
 export type PerspectiveState = {
   player: Point;
   heading: number;
@@ -50,15 +50,21 @@ export function createPerspectiveState(): PerspectiveState {
   return { player, heading: 0, visited: new Set([tileKey(player)]), inspectedFootprint: false, witnessedTail: false, inspectedLog: false, crossedStream: false };
 }
 
+export function explorationDestination(state: PerspectiveState, action: ExplorationAction): Point | undefined {
+  if (action === "left" || action === "right") return undefined;
+  const heading = action === "strafe-left" ? (state.heading + 3) % 4 : action === "strafe-right" ? (state.heading + 1) % 4 : state.heading;
+  const vector = FACING_VECTORS[heading];
+  const sign = action === "backward" ? -1 : 1;
+  return { x: state.player.x + vector.x * sign, y: state.player.y + vector.y * sign };
+}
+
 export function applyExplorationAction(state: PerspectiveState, action: ExplorationAction): boolean {
   if (action === "left" || action === "right") {
     state.heading = (state.heading + (action === "right" ? 1 : 3)) % 4;
     return true;
   }
-  const vector = FACING_VECTORS[state.heading];
-  const sign = action === "forward" ? 1 : -1;
-  const next = { x: state.player.x + vector.x * sign, y: state.player.y + vector.y * sign };
-  if (!isPrototypeFloor(next)) return false;
+  const next = explorationDestination(state, action);
+  if (!next || !isPrototypeFloor(next)) return false;
   state.player = next;
   state.visited.add(tileKey(next));
   if (next.x >= FAR_BANK.x) state.crossedStream = true;
