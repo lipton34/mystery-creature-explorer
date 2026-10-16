@@ -11,6 +11,7 @@ import explorerArt from "./art/explorer.svg?url&no-inline";
 import cottageArt from "./art/cottage.svg?url";
 import { expeditionProgress, isExpeditionComplete } from "./expedition";
 import { explorationGuidance, SPOT_LABELS } from "./exploration-guidance";
+import { findWalkPath, mapPointAt } from "./navigation";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app is missing");
@@ -39,6 +40,7 @@ app.innerHTML = `
     <button id="start-expedition" type="button">🌲 あたらしい森へ！</button>
   </section>
   </main>
+  <div id="exploration-toolbar">
   <aside id="expedition-hud" aria-label="探索のヒント">
     <p id="expedition-status" aria-live="polite"></p>
     <div id="exploration-guidance" aria-live="polite" aria-atomic="true">
@@ -49,6 +51,8 @@ app.innerHTML = `
       </div>
     </div>
   </aside>
+  <button id="inspect" type="button" aria-label="まわりをしらべる" aria-describedby="explore-tip">🔎 しらべる</button>
+  </div>
   <div id="home-feedback">
     <aside id="favorite-summary" aria-label="お気に入りのモリル" role="status" aria-live="polite" aria-atomic="true"></aside>
     <p id="home-reaction" role="status" aria-live="polite" aria-atomic="true">モリルを タップしてみよう！</p>
@@ -61,25 +65,28 @@ app.innerHTML = `
       <button id="announcement-close" type="button">つづける ▶</button>
     </div>
   </div>
-  <button id="inspect" type="button" aria-label="まわりをしらべる">🔎 しらべる</button>
   <p id="message" role="status" aria-live="polite">森を歩いて、モリルを見つけよう！</p>
+  <details id="movement-help">
+  <summary>移動ボタンをつかう</summary>
   <div id="controls" aria-label="移動操作">
     <button data-direction="up" aria-label="上へ">▲</button>
     <button data-direction="left" aria-label="左へ">◀</button>
     <button data-direction="down" aria-label="下へ">▼</button>
     <button data-direction="right" aria-label="右へ">▶</button>
   </div>
-  <footer>パソコン：矢印キー・WASDで移動 / スペースで調べる。スマホ：画面のボタンで操作。はっけんは自動で記録されます。</footer>
+  </details>
+  <footer>地図の いきたい ばしょを クリック・タップ。じぶんを タップすると とまります。<br>パソコン：矢印キー・WASDでも移動 / スペースで調べる / Escで停止。はっけんは自動で記録されます。</footer>
 `;
 
 const message = document.querySelector<HTMLElement>("#message");
 const book = document.querySelector<HTMLElement>("#encyclopedia");
-const controls = document.querySelector<HTMLElement>("#controls");
+const controls = document.querySelector<HTMLDetailsElement>("#movement-help");
 const toggleBook = document.querySelector<HTMLButtonElement>("#toggle-book");
 let bookOpen = false;
 let homeOpen = true;
 let resumeHomeAfterBook = false;
 let startNewExpedition: (() => void) | undefined;
+let stopExplorationMovement: (() => void) | undefined;
 const home = document.querySelector<HTMLElement>("#home");
 const homeButton = document.querySelector<HTMLButtonElement>("#go-home");
 const resetButton = document.querySelector<HTMLButtonElement>("#reset");
@@ -96,6 +103,7 @@ const announcementClose = document.querySelector<HTMLButtonElement>("#announceme
 let announcementOpen = false;
 let nextAnnouncement: (() => void) | undefined;
 function showAnnouncement(icon: string, heading: string, detail: string, afterClose?: () => void): void {
+  stopExplorationMovement?.();
   announcementOpen = true;
   nextAnnouncement = afterClose;
   if (announcementIcon) announcementIcon.textContent = icon;
@@ -217,6 +225,7 @@ function renderHome(): void {
   renderFavorite();
 }
 function showHome(open: boolean): void {
+  if (open) stopExplorationMovement?.();
   // The home button is also available from the encyclopedia.
   if (open && bookOpen) {
     bookOpen = false;
@@ -251,6 +260,7 @@ document.querySelector("#start-expedition")?.addEventListener("click", () => {
 
 function say(text: string): void { if (message) message.textContent = text; }
 function showBook(open: boolean): void {
+  if (open) stopExplorationMovement?.();
   bookOpen = open;
   if (open) {
     resumeHomeAfterBook = homeOpen;
@@ -303,6 +313,9 @@ class ForestScene extends Phaser.Scene {
   private creatureSprites: Phaser.GameObjects.Image[] = [];
   private playerSprite!: Phaser.GameObjects.Image;
   private companion: ReturnType<typeof loadFavorite> = null;
+  private walkPath: Point[] = [];
+  private lastPathMoveAt = 0;
+  private pointerStart?: { id: number; x: number; y: number };
 
   constructor() { super("Forest"); }
 
@@ -317,9 +330,58 @@ class ForestScene extends Phaser.Scene {
     this.newForest();
     inspectButton?.addEventListener("click", () => this.inspect());
     startNewExpedition = () => this.newForest();
+    stopExplorationMovement = () => {
+      if (this.walkPath.length) say("ここで とまるよ。");
+      this.stopMovement();
+    };
+    const canvas = this.game.canvas;
+    canvas.tabIndex = 0;
+    canvas.setAttribute("aria-label", "いきたい ばしょを タップして移動。キーボードでも操作できます。");
+    const pointerDown = (event: PointerEvent) => {
+      if (!event.isPrimary || event.button !== 0 || bookOpen || homeOpen || announcementOpen) return;
+      const point = mapPointAt({ x: event.clientX, y: event.clientY }, canvas.getBoundingClientRect());
+      if (point?.x === this.world.player.x && point.y === this.world.player.y) {
+        this.stopMovement();
+        say("ここで とまるよ。");
+        return;
+      }
+      this.pointerStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    };
+    const pointerUp = (event: PointerEvent) => {
+      const start = this.pointerStart;
+      this.pointerStart = undefined;
+      if (!start || event.button !== 0 || start.id !== event.pointerId || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) return;
+      if (bookOpen || homeOpen || announcementOpen) return;
+      const destination = mapPointAt({ x: event.clientX, y: event.clientY }, canvas.getBoundingClientRect());
+      if (!destination) return;
+      canvas.focus({ preventScroll: true });
+      this.stopMovement();
+      this.walkPath = findWalkPath(this.world, destination);
+      this.lastPathMoveAt = this.time.now - 160;
+      say(this.walkPath.length ? "しるしの ばしょへ あるくよ！ じぶんを タップすると とまるよ。"
+        : destination.x === this.world.player.x && destination.y === this.world.player.y ? "ここで とまるよ。" : "そこへは いけないみたい。みちを タップしてね。");
+      this.renderWorld();
+    };
+    const cancelPointer = () => { this.pointerStart = undefined; };
+    const pointerMove = (event: PointerEvent) => {
+      const start = this.pointerStart;
+      if (start?.id === event.pointerId && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) cancelPointer();
+    };
+    const stop = () => stopExplorationMovement?.();
+    canvas.addEventListener("pointerdown", pointerDown);
+    canvas.addEventListener("pointerup", pointerUp);
+    canvas.addEventListener("pointermove", pointerMove);
+    canvas.addEventListener("pointercancel", cancelPointer);
+    canvas.addEventListener("pointerleave", cancelPointer);
+    window.addEventListener("blur", stop);
+    controls?.addEventListener("toggle", stop);
     this.keyHandler = (event: KeyboardEvent) => {
       if (bookOpen || homeOpen || announcementOpen) return;
-      if (event.target instanceof HTMLElement && event.target.closest("button, input, textarea, select")) return;
+      if (event.key === "Escape") {
+        stopExplorationMovement?.();
+        return;
+      }
+      if (event.target instanceof HTMLElement && event.target.closest("button, input, textarea, select, summary, a")) return;
       if (event.key === " ") {
         event.preventDefault();
         if (!event.repeat) this.inspect();
@@ -332,15 +394,24 @@ class ForestScene extends Phaser.Scene {
       const direction = map[event.key];
       if (direction) {
         event.preventDefault();
-        if (!event.repeat) this.move(direction);
+        if (!event.repeat) {
+          this.stopMovement();
+          this.move(direction);
+        }
       }
     };
     window.addEventListener("keydown", this.keyHandler);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       if (this.keyHandler) window.removeEventListener("keydown", this.keyHandler);
-
+      canvas.removeEventListener("pointerdown", pointerDown);
+      canvas.removeEventListener("pointerup", pointerUp);
+      canvas.removeEventListener("pointermove", pointerMove);
+      canvas.removeEventListener("pointercancel", cancelPointer);
+      canvas.removeEventListener("pointerleave", cancelPointer);
+      window.removeEventListener("blur", stop);
+      controls?.removeEventListener("toggle", stop);
+      stopExplorationMovement = undefined;
     });
-    window.addEventListener("blur", () => { this.heldDirection = null; });
 
     document.querySelector("#reset")?.addEventListener("click", () => this.newForest());
     document.querySelectorAll<HTMLButtonElement>("[data-direction]").forEach((button) => {
@@ -349,11 +420,17 @@ class ForestScene extends Phaser.Scene {
         if (bookOpen || homeOpen || announcementOpen) return;
         event.preventDefault();
         button.setPointerCapture(event.pointerId);
+        this.stopMovement();
         this.heldDirection = dir;
-        this.lastMoveAt = performance.now();
+        this.lastMoveAt = this.time.now;
         this.move(dir);
       };
       button.addEventListener("pointerdown", start);
+      button.addEventListener("click", (event) => {
+        if (event.detail !== 0 || bookOpen || homeOpen || announcementOpen) return;
+        this.stopMovement();
+        this.move(dir);
+      });
       const stop = () => { if (this.heldDirection === dir) this.heldDirection = null; };
       button.addEventListener("pointerup", stop);
       button.addEventListener("pointercancel", stop);
@@ -362,17 +439,40 @@ class ForestScene extends Phaser.Scene {
   }
 
   update(time: number): void {
-    if (time - this.lastFrameAt >= 50 && !bookOpen && !homeOpen && !announcementOpen) {
+    if (bookOpen || homeOpen || announcementOpen) {
+      this.stopMovement();
+      return;
+    }
+    if (time - this.lastFrameAt >= 50) {
       this.lastFrameAt = time;
       this.renderWorld();
     }
-    if (this.heldDirection && !bookOpen && !homeOpen && !announcementOpen && time - this.lastMoveAt >= 160) {
+    if (this.heldDirection && time - this.lastMoveAt >= 160) {
       this.lastMoveAt = time;
       this.move(this.heldDirection);
     }
+    if (this.walkPath.length && time - this.lastPathMoveAt >= 160) {
+      const next = this.walkPath.shift()!;
+      const direction = (Object.keys(MOVES) as Direction[]).find((key) =>
+        this.world.player.x + MOVES[key].x === next.x && this.world.player.y + MOVES[key].y === next.y,
+      );
+      if (!direction || !isWalkable(this.world, next)) this.stopMovement();
+      else {
+        this.lastPathMoveAt = time;
+        this.move(direction);
+        if (!this.walkPath.length && !announcementOpen) say("とうちゃく！ まわりを みてみよう。");
+      }
+    }
+  }
+
+  private stopMovement(): void {
+    this.heldDirection = null;
+    this.walkPath = [];
+    this.pointerStart = undefined;
   }
 
   private newForest(): void {
+    this.stopMovement();
     this.world = createWorld();
     this.companion = loadFavorite();
     const companion = findCreature(this.companion ?? "");
@@ -403,6 +503,7 @@ class ForestScene extends Phaser.Scene {
   }
 
   private move(direction: Direction): void {
+    if (bookOpen || homeOpen || announcementOpen) return;
     const vector = MOVES[direction];
     const next = { x: this.world.player.x + vector.x, y: this.world.player.y + vector.y };
     if (!isWalkable(this.world, next)) return;
@@ -416,6 +517,7 @@ class ForestScene extends Phaser.Scene {
 
   private inspect(): void {
     if (bookOpen || homeOpen || announcementOpen) return;
+    this.stopMovement();
     const encounter = hiddenEncounterNear(this.world, this.world.player);
     if (!encounter) {
       say("このあたりには なにも ないみたい。🌿 きになる ばしょを さがしてみよう！");
@@ -456,7 +558,7 @@ class ForestScene extends Phaser.Scene {
     if (inspectButton) {
       inspectButton.disabled = !spot || announcementOpen;
       inspectButton.classList.toggle("inspect-ready", Boolean(spot));
-      inspectButton.textContent = spot ? `🔎 ${SPOT_LABELS[spot]}を しらべる！` : "🔎 しらべる";
+      inspectButton.setAttribute("aria-label", spot ? `${SPOT_LABELS[spot]}を しらべる` : "まわりをしらべる");
     }
   }
 
@@ -467,6 +569,11 @@ class ForestScene extends Phaser.Scene {
       for (let x = 0; x < MAP_WIDTH; x++) {
         drawForestTile(g, { x, y }, this.world.tiles[y][x] === 1);
       }
+    }
+    const destination = this.walkPath.at(-1);
+    if (destination) {
+      g.lineStyle(2, 0xffe5a2);
+      g.strokeRoundedRect(destination.x * TILE_SIZE + 3, destination.y * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6, 8);
     }
     for (const [index, encounter] of this.world.encounters.entries()) {
       const creature = findCreature(encounter.id);
@@ -523,6 +630,7 @@ new Phaser.Game({
   width: MAP_WIDTH * TILE_SIZE,
   height: MAP_HEIGHT * TILE_SIZE,
   backgroundColor: "#1a3b36",
+  input: { touch: { capture: false } },
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   scene: [ForestScene],
 });
