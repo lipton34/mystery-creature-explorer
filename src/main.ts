@@ -10,6 +10,7 @@ import { CREATURE_ART, createCreaturePortrait } from "./creature-art";
 import explorerArt from "./art/explorer.svg?url&no-inline";
 import cottageArt from "./art/cottage.svg?url";
 import { expeditionProgress, isExpeditionComplete } from "./expedition";
+import { explorationGuidance, SPOT_LABELS } from "./exploration-guidance";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app is missing");
@@ -26,7 +27,13 @@ app.innerHTML = `
   <div id="game" aria-label="探索ゲーム"></div>
   <aside id="expedition-hud" aria-label="探索のヒント">
     <p id="expedition-status" aria-live="polite"></p>
-    <p id="explore-tip" aria-live="polite">森をたんけんしてみよう！</p>
+    <div id="exploration-guidance" aria-live="polite" aria-atomic="true">
+      <span id="companion-portrait" aria-hidden="true" hidden></span>
+      <div class="guidance-text">
+        <strong id="companion-name" hidden></strong>
+        <p id="explore-tip">森をたんけんしてみよう！</p>
+      </div>
+    </div>
   </aside>
   <section id="encyclopedia" aria-label="モリルの図鑑" hidden>
     <div class="book-emblem" aria-hidden="true">📚</div>
@@ -79,6 +86,8 @@ const resetButton = document.querySelector<HTMLButtonElement>("#reset");
 const progressLabel = document.querySelector<HTMLElement>("#expedition-status");
 const expeditionHud = document.querySelector<HTMLElement>("#expedition-hud");
 const exploreTip = document.querySelector<HTMLElement>("#explore-tip");
+const companionPortrait = document.querySelector<HTMLElement>("#companion-portrait");
+const companionName = document.querySelector<HTMLElement>("#companion-name");
 const announcement = document.querySelector<HTMLElement>("#announcement");
 const announcementIcon = document.querySelector<HTMLElement>("#announcement-icon");
 const announcementHeading = document.querySelector<HTMLElement>("#announcement-heading");
@@ -277,7 +286,6 @@ renderEncyclopedia();
 showHome(true);
 
 type Direction = "up" | "down" | "left" | "right";
-const SPOT_LABELS = { bush: "くさむら", stump: "きりかぶ", rock: "いし" } as const;
 const MOVES: Record<Direction, Point> = {
   up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
   left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
@@ -294,6 +302,7 @@ class ForestScene extends Phaser.Scene {
   private stepsWithoutDiscovery = 0;
   private creatureSprites: Phaser.GameObjects.Image[] = [];
   private playerSprite!: Phaser.GameObjects.Image;
+  private companion: ReturnType<typeof loadFavorite> = null;
 
   constructor() { super("Forest"); }
 
@@ -365,6 +374,17 @@ class ForestScene extends Phaser.Scene {
 
   private newForest(): void {
     this.world = createWorld();
+    this.companion = loadFavorite();
+    const companion = findCreature(this.companion ?? "");
+    if (companionPortrait) {
+      companionPortrait.replaceChildren();
+      companionPortrait.hidden = !companion;
+      if (companion) companionPortrait.append(createCreaturePortrait(companion.id));
+    }
+    if (companionName) {
+      companionName.textContent = companion?.name ?? "";
+      companionName.hidden = !companion;
+    }
     for (const sprite of this.creatureSprites) sprite.destroy();
     this.creatureSprites = this.world.encounters.map((encounter) =>
       this.add.image(0, 0, encounter.id).setDisplaySize(38, 38).setDepth(1),
@@ -429,16 +449,10 @@ class ForestScene extends Phaser.Scene {
     const { found, total } = expeditionProgress(this.world.encounters);
     const spot = nearbySearchSpot(this.world, this.world.player);
     if (progressLabel) progressLabel.textContent = `🌿 この森で ${found} / ${total} しゅるい はっけん`;
-    const comments = [
-      "どんな モリルが いるかな？",
-      "あわてず ゆっくり たんけんしよう！",
-      "くさむらや いしも みてみよう！",
-      "まだ みぬ なかまが いるかも！",
-      "つぎは どこへ いってみよう？",
-    ];
-    if (exploreTip) exploreTip.textContent = spot
-      ? `🔎 ${SPOT_LABELS[spot]}を しらべてみよう！`
-      : comments[Math.floor(this.stepsWithoutDiscovery / 7) % comments.length];
+    if (exploreTip) {
+      const tip = explorationGuidance(this.companion, this.stepsWithoutDiscovery, spot);
+      if (exploreTip.textContent !== tip) exploreTip.textContent = tip;
+    }
     if (inspectButton) {
       inspectButton.disabled = !spot || announcementOpen;
       inspectButton.classList.toggle("inspect-ready", Boolean(spot));
