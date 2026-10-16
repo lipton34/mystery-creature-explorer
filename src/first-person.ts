@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import "./style.css";
 import "./first-person.css";
 import { renderEncyclopedia } from "./encyclopedia";
-import { applyExplorationAction, canWitnessTail, createPerspectiveState, FAR_BANK, FACING_VECTORS, HEADINGS, inspectionTarget, inspectFootprint, knownMapCells, LOG_APPROACH, PROTOTYPE_MAP, TAIL_HEADING, TAIL_LOOKOUT, terrainAt, type ExplorationAction, type ViewPose } from "./perspective-world";
+import { applyExplorationAction, canWitnessTail, createPerspectiveState, explorationDestination, FAR_BANK, HEADINGS, inspectionTarget, inspectFootprint, knownMapCells, LOG_APPROACH, PROTOTYPE_MAP, TAIL_HEADING, TAIL_LOOKOUT, terrainAt, type ExplorationAction, type ViewPose } from "./perspective-world";
 import { drawPerspective, VIEW_HEIGHT, VIEW_WIDTH } from "./perspective-renderer";
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -18,16 +18,16 @@ app.innerHTML = `
       <div id="perspective-game" aria-label="主観視点の探索画面"></div>
       <section id="encyclopedia" aria-label="モリルの図鑑" hidden><div class="book-heading"><h2>モリルのずかん</h2><span id="collection-count"></span></div><div id="encyclopedia-grid"></div></section>
     </div>
-    <aside class="map-panel" aria-label="自動で埋まる地図"><h2>歩いた道の記録</h2><canvas id="auto-map" role="img" aria-label="自動マップ"></canvas><p>明るいマス：歩いた道<br>青緑：近くで見た小川<br>茶色：歩いた倒木<br>暗い場所：未探索<br>▲：現在地と向き<br><span id="map-count"></span></p></aside>
+    <aside class="map-panel" aria-label="自動で埋まる地図"><canvas id="auto-map" role="img" aria-label="自動マップ"></canvas></aside>
   </main>
   <div class="perspective-tools">
     <p id="view-status" role="status" aria-live="polite"></p>
-    <div class="perspective-actions" role="group" aria-label="主観視点の移動"><button type="button" data-action="left">↶ 左を向く</button><button type="button" data-action="forward">↑ 前へ</button><button type="button" data-action="backward">↓ 後ろへ</button><button type="button" data-action="right">右を向く ↷</button></div>
+    <div class="perspective-actions" role="group" aria-label="主観視点の移動"><button type="button" data-action="left">↶ 左を向く</button><button type="button" data-action="forward">↑ 前へ</button><button type="button" data-action="right">右を向く ↷</button><button type="button" data-action="strafe-left">← 左へ移動</button><button type="button" data-action="backward">↓ 後ろへ</button><button type="button" data-action="strafe-right">右へ移動 →</button></div>
     <button id="prototype-inspect" type="button">調べる</button>
     <button id="tail-replay" type="button" hidden>目撃地点から再生</button>
   </div>
   <p id="prototype-message" class="prototype-message" role="status" aria-live="polite">木漏れ日の先から、水の流れる音がする。道を進み、足元や木々の間を見てみよう。</p>
-  <footer>矢印キー・W/S：前進／後退、左右キー・A/D：方向転換、Space：調べる。ボタンでも操作できます。地図は移動先の指定には使いません。<br>今回は川辺の目撃から、渡れる場所を見つけて対岸へ進むまで。大型モリルの全身・発見イベントは未制作です。探索記録は再読み込みでリセットされ、図鑑・お気に入りは変更しません。</footer>
+  <footer>上下キー・W/S：前進／後退、左右キー・A/D：方向転換、Q/E：視点を変えずに左右へ移動、Space：調べる。ボタンでも操作できます。地図は移動先の指定には使いません。<br>今回は川辺の目撃から、渡れる場所を見つけて対岸へ進むまで。大型モリルの全身・発見イベントは未制作です。探索記録は再読み込みでリセットされ、図鑑・お気に入りは変更しません。</footer>
 `;
 
 function element<ElementType extends HTMLElement>(selector: string): ElementType {
@@ -60,7 +60,7 @@ class PerspectiveScene extends Phaser.Scene {
   create(): void {
     this.graphics = this.add.graphics();
     this.game.canvas.tabIndex = 0;
-    this.game.canvas.setAttribute("aria-label", "主観視点。矢印キーで前進・後退・方向転換、スペースで調査。");
+    this.game.canvas.setAttribute("aria-label", "主観視点。矢印キーで前進・後退・方向転換、QとEで横移動、スペースで調査。");
     for (const button of actionButtons) button.addEventListener("click", () => this.act(button.dataset.action as ExplorationAction));
     inspectButton.addEventListener("click", () => this.inspect());
     replayButton.addEventListener("click", () => {
@@ -103,7 +103,7 @@ class PerspectiveScene extends Phaser.Scene {
     const keyHandler = (event: KeyboardEvent) => {
       if (this.bookOpen) return;
       if (event.target instanceof HTMLElement && event.target.closest("button, a, input, textarea, select")) return;
-      const actions: Record<string, ExplorationAction> = { ArrowUp: "forward", w: "forward", ArrowDown: "backward", s: "backward", ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right" };
+      const actions: Record<string, ExplorationAction> = { ArrowUp: "forward", w: "forward", ArrowDown: "backward", s: "backward", ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right", q: "strafe-left", e: "strafe-right" };
       if (event.repeat && (actions[event.key] || event.key === " ")) { event.preventDefault(); return; }
       if (event.key === " ") { event.preventDefault(); this.inspect(); }
       else if (actions[event.key]) { event.preventDefault(); this.act(actions[event.key]); }
@@ -123,10 +123,8 @@ class PerspectiveScene extends Phaser.Scene {
     const from = this.pose();
     const hadCrossedStream = this.state.crossedStream;
     if (!applyExplorationAction(this.state, action)) {
-      const direction = FACING_VECTORS[this.state.heading];
-      const sign = action === "backward" ? -1 : 1;
-      const destination = { x: this.state.player.x + direction.x * sign, y: this.state.player.y + direction.y * sign };
-      message.textContent = terrainAt(destination) === "water"
+      const destination = explorationDestination(this.state, action);
+      message.textContent = destination && terrainAt(destination) === "water"
         ? this.state.crossedStream ? "ここから水には入れない。岸を行き来するときは、見つけた倒木を使おう。" : "流れがあり、ここからは渡れそうにない。川沿いに、向こう岸へ行ける場所はないだろうか。"
         : "こちらは木々にふさがれている。向きを変えて、道の続く先を見てみよう。";
       return;
@@ -166,7 +164,7 @@ class PerspectiveScene extends Phaser.Scene {
     inspectButton.setAttribute("aria-label", targetName ? `${targetName}を調べる` : "まわりを調べる");
     replayButton.hidden = !this.state.witnessedTail;
     replayButton.disabled = busy;
-    const text = `${HEADINGS[this.state.heading]}を向いている · ${targetName ? `${targetName}を調べられる` : this.state.crossedStream ? "倒木で対岸へ渡れる" : this.state.witnessedTail ? "川沿いの景色を見てみよう" : "足元と道の先を見てみよう"}`;
+    const text = targetName ? `${targetName}を調べられる` : this.state.crossedStream ? "倒木で対岸へ渡れる" : this.state.witnessedTail ? "川沿いの景色を見てみよう" : "足元と道の先を見てみよう";
     if (status.textContent !== text) status.textContent = text;
     this.drawMap();
   }
@@ -189,7 +187,6 @@ class PerspectiveScene extends Phaser.Scene {
     context.moveTo(0, -7); context.lineTo(6, 6); context.lineTo(0, 3); context.lineTo(-6, 6); context.closePath();
     context.fill(); context.stroke(); context.restore();
     mapCanvas.setAttribute("aria-label", `探索済み${this.state.visited.size}マス。現在地は東西${this.state.player.x}、南北${this.state.player.y}、${HEADINGS[this.state.heading]}向き。未探索の道は非表示。`);
-    element("#map-count").textContent = `${this.state.visited.size}マスを記録`;
   }
 
   update(time: number): void {

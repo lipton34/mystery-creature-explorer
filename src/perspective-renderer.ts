@@ -1,5 +1,6 @@
 import type Phaser from "phaser";
-import { FOOTPRINT, terrainAt, wallHit, type ViewPose } from "./perspective-world";
+import { terrainAt, wallHit, type ViewPose } from "./perspective-world";
+import { footprintContains } from "./footprint-texture";
 
 export const VIEW_WIDTH = 640;
 export const VIEW_HEIGHT = 400;
@@ -23,10 +24,14 @@ export function projectPoint(pose: ViewPose, point: { x: number; y: number }): {
   return { x: VIEW_WIDTH / 2 + lateral * FOCAL / forward, floor: HORIZON + 0.45 * FOCAL / forward, scale: FOCAL / forward };
 }
 
-function drawPrint(g: Phaser.GameObjects.Graphics, left: number, top: number, scale: number): void {
-  g.fillStyle(0x4c5947, 0.85);
-  g.fillEllipse(left, top, scale * 0.22, scale * 0.105);
-  for (const offset of [-0.08, 0, 0.08]) g.fillEllipse(left + offset * scale, top - scale * 0.075, scale * 0.06, scale * 0.045);
+export function floorPointAt(pose: ViewPose, column: number, row: number): { x: number; y: number } | undefined {
+  if (row <= HORIZON) return undefined;
+  const distance = 0.45 * FOCAL / (row - HORIZON);
+  const lateral = (column - VIEW_WIDTH / 2) * distance / FOCAL;
+  return {
+    x: pose.x + Math.sin(pose.angle) * distance + Math.cos(pose.angle) * lateral,
+    y: pose.y - Math.cos(pose.angle) * distance + Math.sin(pose.angle) * lateral,
+  };
 }
 
 export function drawPerspective(g: Phaser.GameObjects.Graphics, pose: ViewPose, tailProgress?: number, time = 0): void {
@@ -37,18 +42,16 @@ export function drawPerspective(g: Phaser.GameObjects.Graphics, pose: ViewPose, 
   g.fillRect(0, 64, VIEW_WIDTH, 110);
   g.fillStyle(0xffe9a5, 0.9);
   g.fillCircle(440, 67, 25);
-  for (let row = HORIZON; row < VIEW_HEIGHT; row += 4) {
+  for (let row = HORIZON + 4; row < VIEW_HEIGHT; row += 4) {
     const distance = 0.45 * FOCAL / Math.max(1, row - HORIZON);
     let runStart = 0;
     let runColor = -1;
     for (let column = 0; column <= VIEW_WIDTH; column += 4) {
-      const lateral = (column - VIEW_WIDTH / 2) * distance / FOCAL;
-      const worldX = pose.x + Math.sin(pose.angle) * distance + Math.cos(pose.angle) * lateral;
-      const worldY = pose.y - Math.cos(pose.angle) * distance + Math.sin(pose.angle) * lateral;
+      const { x: worldX, y: worldY } = floorPointAt(pose, column, row)!;
       const terrain = terrainAt({ x: Math.floor(worldX), y: Math.floor(worldY) });
       const ripple = Math.sin(worldX * 18 + worldY * 14 - time / 900) > 0.97;
       const grain = Math.sin(worldY * 42) > 0.7;
-      const base = terrain === "water" ? ripple ? 0xa9d9cb : 0x75bcb5 : terrain === "log" ? grain ? 0x866039 : 0xbe9255 : 0xcdcb93;
+      const base = terrain === "path" && footprintContains(worldX, worldY) ? 0x4c5947 : terrain === "water" ? ripple ? 0xa9d9cb : 0x75bcb5 : terrain === "log" ? grain ? 0x866039 : 0xbe9255 : 0xcdcb93;
       const color = mixColor(base, 0xd5e6b9, Math.min(0.65, distance / 25));
       if (color !== runColor || column === VIEW_WIDTH) {
         if (runColor !== -1) { g.fillStyle(runColor); g.fillRect(runStart, row, column - runStart, 4); }
@@ -87,14 +90,6 @@ export function drawPerspective(g: Phaser.GameObjects.Graphics, pose: ViewPose, 
     g.fillEllipse(logEnd.x, logEnd.floor - logEnd.scale * 0.11, logEnd.scale * 0.4, logEnd.scale * 0.22);
     g.lineStyle(Math.max(1, logEnd.scale * 0.008), 0x967044);
     g.strokeEllipse(logEnd.x, logEnd.floor - logEnd.scale * 0.11, logEnd.scale * 0.25, logEnd.scale * 0.13);
-  }
-  for (const footprint of [{ x: FOOTPRINT.x + 0.32, y: FOOTPRINT.y + 0.25 }, { x: FOOTPRINT.x + 0.68, y: FOOTPRINT.y + 0.65 }]) {
-    const projected = projectPoint(pose, footprint);
-    if (projected && projected.floor < VIEW_HEIGHT + 35) drawPrint(g, projected.x, projected.floor, projected.scale);
-  }
-  if (Math.floor(pose.x) === FOOTPRINT.x && Math.floor(pose.y) === FOOTPRINT.y) {
-    drawPrint(g, 270, 360, 230);
-    drawPrint(g, 390, 385, 230);
   }
   if (tailProgress !== undefined && tailProgress < 1) {
     const travel = Math.max(0, (tailProgress - 0.2) / 0.8);
