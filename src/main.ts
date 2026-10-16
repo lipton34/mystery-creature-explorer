@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import "./style.css";
 import { createWorld, encounterAt, hiddenEncounterNear, nearbySearchSpot, isWalkable, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type Point, type World } from "./world";
 import { loadCollection, recordDiscovery } from "./collection";
-import { loadFavorite, selectFavorite } from "./favorite";
+import { clearFavorite, loadFavorite, selectFavorite } from "./favorite";
 import { CREATURES, findCreature } from "./creatures";
 import { renderEncyclopedia } from "./encyclopedia";
 import { drawDiscoverySparkles, drawForestTile } from "./visuals";
@@ -10,6 +10,9 @@ import { CREATURE_ART, createCreaturePortrait } from "./creature-art";
 import explorerArt from "./art/explorer.svg?url&no-inline";
 import cottageArt from "./art/cottage.svg?url";
 import { expeditionProgress, isExpeditionComplete } from "./expedition";
+import { explorationGuidance, SPOT_LABELS } from "./exploration-guidance";
+import { findWalkPath, mapPointAt } from "./navigation";
+import { walkingPosition, WALK_DURATION_MS, type WalkingStep } from "./walking";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app is missing");
@@ -24,10 +27,6 @@ app.innerHTML = `
   </header>
   <main id="stage">
   <div id="game" aria-label="探索ゲーム"></div>
-  <aside id="expedition-hud" aria-label="探索のヒント">
-    <p id="expedition-status" aria-live="polite"></p>
-    <p id="explore-tip" aria-live="polite">森をたんけんしてみよう！</p>
-  </aside>
   <section id="encyclopedia" aria-label="モリルの図鑑" hidden>
     <div class="book-emblem" aria-hidden="true">📚</div>
     <div class="book-heading"><h2>📖 モリルのずかん</h2><span id="collection-count"></span></div>
@@ -42,6 +41,19 @@ app.innerHTML = `
     <button id="start-expedition" type="button">🌲 あたらしい森へ！</button>
   </section>
   </main>
+  <div id="exploration-toolbar">
+  <aside id="expedition-hud" aria-label="探索のヒント">
+    <p id="expedition-status" aria-live="polite"></p>
+    <div id="exploration-guidance" aria-live="polite" aria-atomic="true">
+      <span id="companion-portrait" aria-hidden="true" hidden></span>
+      <div class="guidance-text">
+        <strong id="companion-name" hidden></strong>
+        <p id="explore-tip">森をたんけんしてみよう！</p>
+      </div>
+    </div>
+  </aside>
+  <button id="inspect" type="button" aria-label="まわりをしらべる" aria-describedby="explore-tip">🔎 しらべる</button>
+  </div>
   <div id="home-feedback">
     <aside id="favorite-summary" aria-label="お気に入りのモリル" role="status" aria-live="polite" aria-atomic="true"></aside>
     <p id="home-reaction" role="status" aria-live="polite" aria-atomic="true">モリルを タップしてみよう！</p>
@@ -54,31 +66,36 @@ app.innerHTML = `
       <button id="announcement-close" type="button">つづける ▶</button>
     </div>
   </div>
-  <button id="inspect" type="button" aria-label="まわりをしらべる">🔎 しらべる</button>
   <p id="message" role="status" aria-live="polite">森を歩いて、モリルを見つけよう！</p>
+  <details id="movement-help">
+  <summary>移動ボタンをつかう</summary>
   <div id="controls" aria-label="移動操作">
     <button data-direction="up" aria-label="上へ">▲</button>
     <button data-direction="left" aria-label="左へ">◀</button>
     <button data-direction="down" aria-label="下へ">▼</button>
     <button data-direction="right" aria-label="右へ">▶</button>
   </div>
-  <footer>パソコン：矢印キー・WASDで移動 / スペースで調べる。スマホ：画面のボタンで操作。はっけんは自動で記録されます。</footer>
+  </details>
+  <footer>地図の いきたい ばしょを クリック・タップ。じぶんを タップすると とまります。<br>パソコン：矢印キー・WASDでも移動 / スペースで調べる / Escで停止。はっけんは自動で記録されます。</footer>
 `;
 
 const message = document.querySelector<HTMLElement>("#message");
 const book = document.querySelector<HTMLElement>("#encyclopedia");
-const controls = document.querySelector<HTMLElement>("#controls");
+const controls = document.querySelector<HTMLDetailsElement>("#movement-help");
 const toggleBook = document.querySelector<HTMLButtonElement>("#toggle-book");
 let bookOpen = false;
 let homeOpen = true;
 let resumeHomeAfterBook = false;
 let startNewExpedition: (() => void) | undefined;
+let stopExplorationMovement: (() => void) | undefined;
 const home = document.querySelector<HTMLElement>("#home");
 const homeButton = document.querySelector<HTMLButtonElement>("#go-home");
 const resetButton = document.querySelector<HTMLButtonElement>("#reset");
 const progressLabel = document.querySelector<HTMLElement>("#expedition-status");
 const expeditionHud = document.querySelector<HTMLElement>("#expedition-hud");
 const exploreTip = document.querySelector<HTMLElement>("#explore-tip");
+const companionPortrait = document.querySelector<HTMLElement>("#companion-portrait");
+const companionName = document.querySelector<HTMLElement>("#companion-name");
 const announcement = document.querySelector<HTMLElement>("#announcement");
 const announcementIcon = document.querySelector<HTMLElement>("#announcement-icon");
 const announcementHeading = document.querySelector<HTMLElement>("#announcement-heading");
@@ -87,6 +104,7 @@ const announcementClose = document.querySelector<HTMLButtonElement>("#announceme
 let announcementOpen = false;
 let nextAnnouncement: (() => void) | undefined;
 function showAnnouncement(icon: string, heading: string, detail: string, afterClose?: () => void): void {
+  stopExplorationMovement?.();
   announcementOpen = true;
   nextAnnouncement = afterClose;
   if (announcementIcon) announcementIcon.textContent = icon;
@@ -129,7 +147,7 @@ function renderFavorite(notice?: string): void {
     const heading = document.createElement("strong");
     heading.textContent = favorite ? `⭐ おきにいり：${favorite.name}` : "⭐ おきにいりは まだ えらんでいないよ";
     const note = document.createElement("p");
-    note.textContent = notice ?? (favorite ? "ほかの モリルにも かえられるよ！" : "みつけた モリルの「☆ えらぶ」を おしてね。");
+    note.textContent = notice ?? (favorite ? "⭐を もういちど おすと はずせるよ！" : "みつけた モリルの「☆ えらぶ」を おしてね。");
     const text = document.createElement("div");
     text.append(heading, note);
     summary.replaceChildren();
@@ -139,7 +157,9 @@ function renderFavorite(notice?: string): void {
   document.querySelectorAll<HTMLButtonElement>("[data-favorite-id]").forEach((button) => {
     const selected = button.dataset.favoriteId === favorite?.id;
     button.setAttribute("aria-pressed", String(selected));
-    button.textContent = selected ? "⭐ おきにいり" : "☆ えらぶ";
+    button.textContent = selected ? "⭐ はずす" : "☆ えらぶ";
+    const creature = findCreature(button.dataset.favoriteId ?? "");
+    button.setAttribute("aria-label", `${creature?.name ?? "モリル"}を おきにいり${selected ? "から はずす" : "にする"}`);
   });
 }
 function renderHome(): void {
@@ -195,11 +215,12 @@ function renderHome(): void {
       favoriteButton.dataset.favoriteId = creature.id;
       favoriteButton.setAttribute("aria-label", creature.name + "を おきにいりにする");
       favoriteButton.addEventListener("click", () => {
-        const result = selectFavorite(creature.id);
+        const removing = loadFavorite() === creature.id;
+        const result = removing ? clearFavorite() : selectFavorite(creature.id);
         if (result === "unavailable") return;
         renderFavorite(result === "session-only"
-          ? "この画面を とじると、おきにいりを わすれてしまうかも。"
-          : `${creature.name}に きめた！`);
+          ? removing ? "この画面では はずしたよ。つぎは おきにいりに もどるかも。" : "この画面を とじると、おきにいりを わすれてしまうかも。"
+          : removing ? "おきにいりを はずしたよ！" : `${creature.name}に きめた！`);
       });
       choice.append(tile, favoriteButton);
       grid.append(choice);
@@ -208,6 +229,7 @@ function renderHome(): void {
   renderFavorite();
 }
 function showHome(open: boolean): void {
+  if (open) stopExplorationMovement?.();
   // The home button is also available from the encyclopedia.
   if (open && bookOpen) {
     bookOpen = false;
@@ -242,6 +264,7 @@ document.querySelector("#start-expedition")?.addEventListener("click", () => {
 
 function say(text: string): void { if (message) message.textContent = text; }
 function showBook(open: boolean): void {
+  if (open) stopExplorationMovement?.();
   bookOpen = open;
   if (open) {
     resumeHomeAfterBook = homeOpen;
@@ -277,7 +300,6 @@ renderEncyclopedia();
 showHome(true);
 
 type Direction = "up" | "down" | "left" | "right";
-const SPOT_LABELS = { bush: "くさむら", stump: "きりかぶ", rock: "いし" } as const;
 const MOVES: Record<Direction, Point> = {
   up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
   left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
@@ -294,6 +316,16 @@ class ForestScene extends Phaser.Scene {
   private stepsWithoutDiscovery = 0;
   private creatureSprites: Phaser.GameObjects.Image[] = [];
   private playerSprite!: Phaser.GameObjects.Image;
+  private playerShadow!: Phaser.GameObjects.Ellipse;
+  private walkingStep?: WalkingStep;
+  private queuedDirection?: Direction;
+  private inspectOnArrival = false;
+  private announceArrival = false;
+  private reduceMotion = false;
+  private companion: ReturnType<typeof loadFavorite> = null;
+  private walkPath: Point[] = [];
+  private lastPathMoveAt = 0;
+  private pointerStart?: { id: number; x: number; y: number };
 
   constructor() { super("Forest"); }
 
@@ -304,13 +336,67 @@ class ForestScene extends Phaser.Scene {
 
   create(): void {
     this.graphics = this.add.graphics();
+    this.playerShadow = this.add.ellipse(0, 0, 23, 8, 0x213c3f).setDepth(1);
     this.playerSprite = this.add.image(0, 0, "explorer").setDisplaySize(38, 38).setDepth(2);
+    this.reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     this.newForest();
     inspectButton?.addEventListener("click", () => this.inspect());
     startNewExpedition = () => this.newForest();
+    stopExplorationMovement = () => {
+      if (this.walkPath.length || this.walkingStep) say("ここで とまるよ。");
+      this.stopMovement();
+    };
+    const canvas = this.game.canvas;
+    canvas.tabIndex = 0;
+    canvas.setAttribute("aria-label", "いきたい ばしょを タップして移動。キーボードでも操作できます。");
+    const pointerDown = (event: PointerEvent) => {
+      if (!event.isPrimary || event.button !== 0 || bookOpen || homeOpen || announcementOpen) return;
+      const point = mapPointAt({ x: event.clientX, y: event.clientY }, canvas.getBoundingClientRect());
+      const pose = this.walkingStep ? walkingPosition(this.walkingStep, this.time.now) : this.world.player;
+      if (point?.x === Math.floor(pose.x + 0.5) && point.y === Math.floor(pose.y + 0.5)) {
+        this.stopMovement();
+        say("ここで とまるよ。");
+        return;
+      }
+      this.pointerStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    };
+    const pointerUp = (event: PointerEvent) => {
+      const start = this.pointerStart;
+      this.pointerStart = undefined;
+      if (!start || event.button !== 0 || start.id !== event.pointerId || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) return;
+      if (bookOpen || homeOpen || announcementOpen) return;
+      const destination = mapPointAt({ x: event.clientX, y: event.clientY }, canvas.getBoundingClientRect());
+      if (!destination) return;
+      canvas.focus({ preventScroll: true });
+      this.stopMovement();
+      const origin = this.walkingStep?.to ?? this.world.player;
+      this.walkPath = findWalkPath({ ...this.world, player: origin }, destination);
+      this.announceArrival = this.walkPath.length > 0;
+      this.lastPathMoveAt = this.time.now - WALK_DURATION_MS;
+      say(this.walkPath.length ? "しるしの ばしょへ あるくよ！ じぶんを タップすると とまるよ。"
+        : destination.x === origin.x && destination.y === origin.y ? "ここで とまるよ。" : "そこへは いけないみたい。みちを タップしてね。");
+      this.renderWorld();
+    };
+    const cancelPointer = () => { this.pointerStart = undefined; };
+    const pointerMove = (event: PointerEvent) => {
+      const start = this.pointerStart;
+      if (start?.id === event.pointerId && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) cancelPointer();
+    };
+    const stop = () => stopExplorationMovement?.();
+    canvas.addEventListener("pointerdown", pointerDown);
+    canvas.addEventListener("pointerup", pointerUp);
+    canvas.addEventListener("pointermove", pointerMove);
+    canvas.addEventListener("pointercancel", cancelPointer);
+    canvas.addEventListener("pointerleave", cancelPointer);
+    window.addEventListener("blur", stop);
+    controls?.addEventListener("toggle", stop);
     this.keyHandler = (event: KeyboardEvent) => {
       if (bookOpen || homeOpen || announcementOpen) return;
-      if (event.target instanceof HTMLElement && event.target.closest("button, input, textarea, select")) return;
+      if (event.key === "Escape") {
+        stopExplorationMovement?.();
+        return;
+      }
+      if (event.target instanceof HTMLElement && event.target.closest("button, input, textarea, select, summary, a")) return;
       if (event.key === " ") {
         event.preventDefault();
         if (!event.repeat) this.inspect();
@@ -323,15 +409,24 @@ class ForestScene extends Phaser.Scene {
       const direction = map[event.key];
       if (direction) {
         event.preventDefault();
-        if (!event.repeat) this.move(direction);
+        if (!event.repeat) {
+          this.stopMovement();
+          this.move(direction);
+        }
       }
     };
     window.addEventListener("keydown", this.keyHandler);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       if (this.keyHandler) window.removeEventListener("keydown", this.keyHandler);
-
+      canvas.removeEventListener("pointerdown", pointerDown);
+      canvas.removeEventListener("pointerup", pointerUp);
+      canvas.removeEventListener("pointermove", pointerMove);
+      canvas.removeEventListener("pointercancel", cancelPointer);
+      canvas.removeEventListener("pointerleave", cancelPointer);
+      window.removeEventListener("blur", stop);
+      controls?.removeEventListener("toggle", stop);
+      stopExplorationMovement = undefined;
     });
-    window.addEventListener("blur", () => { this.heldDirection = null; });
 
     document.querySelector("#reset")?.addEventListener("click", () => this.newForest());
     document.querySelectorAll<HTMLButtonElement>("[data-direction]").forEach((button) => {
@@ -340,11 +435,17 @@ class ForestScene extends Phaser.Scene {
         if (bookOpen || homeOpen || announcementOpen) return;
         event.preventDefault();
         button.setPointerCapture(event.pointerId);
+        this.stopMovement();
         this.heldDirection = dir;
-        this.lastMoveAt = performance.now();
+        this.lastMoveAt = this.time.now;
         this.move(dir);
       };
       button.addEventListener("pointerdown", start);
+      button.addEventListener("click", (event) => {
+        if (event.detail !== 0 || bookOpen || homeOpen || announcementOpen) return;
+        this.stopMovement();
+        this.move(dir);
+      });
       const stop = () => { if (this.heldDirection === dir) this.heldDirection = null; };
       button.addEventListener("pointerup", stop);
       button.addEventListener("pointercancel", stop);
@@ -353,18 +454,74 @@ class ForestScene extends Phaser.Scene {
   }
 
   update(time: number): void {
-    if (time - this.lastFrameAt >= 50 && !bookOpen && !homeOpen && !announcementOpen) {
+    this.updateWalking(time);
+    if (bookOpen || homeOpen || announcementOpen) {
+      this.stopMovement();
+      return;
+    }
+    if (!this.walkingStep) {
+      const encounter = encounterAt(this.world, this.world.player);
+      if (encounter) {
+        this.discover(encounter);
+        this.renderWorld();
+        return;
+      }
+      if (this.inspectOnArrival) {
+        this.inspectOnArrival = false;
+        this.inspect();
+        return;
+      }
+      if (this.queuedDirection) {
+        const direction = this.queuedDirection;
+        this.queuedDirection = undefined;
+        this.move(direction);
+      }
+    }
+    if (time - this.lastFrameAt >= 50) {
       this.lastFrameAt = time;
       this.renderWorld();
     }
-    if (this.heldDirection && !bookOpen && !homeOpen && !announcementOpen && time - this.lastMoveAt >= 160) {
+    if (!this.walkingStep && this.heldDirection && time - this.lastMoveAt >= WALK_DURATION_MS) {
       this.lastMoveAt = time;
       this.move(this.heldDirection);
     }
+    if (!this.walkingStep && this.walkPath.length && time - this.lastPathMoveAt >= WALK_DURATION_MS) {
+      const next = this.walkPath.shift()!;
+      const direction = (Object.keys(MOVES) as Direction[]).find((key) =>
+        this.world.player.x + MOVES[key].x === next.x && this.world.player.y + MOVES[key].y === next.y,
+      );
+      if (!direction || !isWalkable(this.world, next)) this.stopMovement();
+      else {
+        this.lastPathMoveAt = time;
+        this.move(direction);
+      }
+    }
+  }
+
+  private stopMovement(): void {
+    this.heldDirection = null;
+    this.walkPath = [];
+    this.pointerStart = undefined;
+    this.queuedDirection = undefined;
+    this.inspectOnArrival = false;
+    this.announceArrival = false;
   }
 
   private newForest(): void {
+    this.stopMovement();
+    this.walkingStep = undefined;
     this.world = createWorld();
+    this.companion = loadFavorite();
+    const companion = findCreature(this.companion ?? "");
+    if (companionPortrait) {
+      companionPortrait.replaceChildren();
+      companionPortrait.hidden = !companion;
+      if (companion) companionPortrait.append(createCreaturePortrait(companion.id));
+    }
+    if (companionName) {
+      companionName.textContent = companion?.name ?? "";
+      companionName.hidden = !companion;
+    }
     for (const sprite of this.creatureSprites) sprite.destroy();
     this.creatureSprites = this.world.encounters.map((encounter) =>
       this.add.image(0, 0, encounter.id).setDisplaySize(38, 38).setDepth(1),
@@ -383,19 +540,52 @@ class ForestScene extends Phaser.Scene {
   }
 
   private move(direction: Direction): void {
+    if (bookOpen || homeOpen || announcementOpen) return;
+    if (this.walkingStep) {
+      this.queuedDirection = direction;
+      return;
+    }
     const vector = MOVES[direction];
     const next = { x: this.world.player.x + vector.x, y: this.world.player.y + vector.y };
     if (!isWalkable(this.world, next)) return;
-    this.world.player = next;
-    this.stepsWithoutDiscovery += 1;
+    this.walkingStep = { from: { ...this.world.player }, to: next, startedAt: this.time.now };
     this.updateExpeditionProgress();
-    const encounter = encounterAt(this.world, next);
-    if (encounter) this.discover(encounter);
     this.renderWorld();
+  }
+
+  private updateWalking(time: number): void {
+    const step = this.walkingStep;
+    if (step && walkingPosition(step, time).progress === 1) {
+      this.world.player = step.to;
+      this.walkingStep = undefined;
+      this.stepsWithoutDiscovery += 1;
+      this.updateExpeditionProgress();
+      if (this.announceArrival && !this.walkPath.length) {
+        this.announceArrival = false;
+        if (!bookOpen && !homeOpen && !announcementOpen && !encounterAt(this.world, this.world.player)) {
+          say("とうちゃく！ まわりを みてみよう。");
+        }
+      }
+    }
+    this.renderPlayer(time);
+  }
+
+  private renderPlayer(time: number): void {
+    const pose = this.walkingStep ? walkingPosition(this.walkingStep, time) : { ...this.world.player, progress: 0 };
+    const lift = this.reduceMotion ? 0 : Math.sin(pose.progress * Math.PI) * 1.5;
+    const center = pose.x * TILE_SIZE + TILE_SIZE / 2;
+    const top = pose.y * TILE_SIZE;
+    this.playerSprite.setPosition(center, top + TILE_SIZE / 2 - lift);
+    this.playerShadow.setPosition(center, top + 33);
   }
 
   private inspect(): void {
     if (bookOpen || homeOpen || announcementOpen) return;
+    this.stopMovement();
+    if (this.walkingStep) {
+      this.inspectOnArrival = true;
+      return;
+    }
     const encounter = hiddenEncounterNear(this.world, this.world.player);
     if (!encounter) {
       say("このあたりには なにも ないみたい。🌿 きになる ばしょを さがしてみよう！");
@@ -429,20 +619,14 @@ class ForestScene extends Phaser.Scene {
     const { found, total } = expeditionProgress(this.world.encounters);
     const spot = nearbySearchSpot(this.world, this.world.player);
     if (progressLabel) progressLabel.textContent = `🌿 この森で ${found} / ${total} しゅるい はっけん`;
-    const comments = [
-      "どんな モリルが いるかな？",
-      "あわてず ゆっくり たんけんしよう！",
-      "くさむらや いしも みてみよう！",
-      "まだ みぬ なかまが いるかも！",
-      "つぎは どこへ いってみよう？",
-    ];
-    if (exploreTip) exploreTip.textContent = spot
-      ? `🔎 ${SPOT_LABELS[spot]}を しらべてみよう！`
-      : comments[Math.floor(this.stepsWithoutDiscovery / 7) % comments.length];
+    if (exploreTip) {
+      const tip = explorationGuidance(this.companion, this.stepsWithoutDiscovery, spot);
+      if (exploreTip.textContent !== tip) exploreTip.textContent = tip;
+    }
     if (inspectButton) {
-      inspectButton.disabled = !spot || announcementOpen;
+      inspectButton.disabled = !spot || announcementOpen || Boolean(this.walkingStep);
       inspectButton.classList.toggle("inspect-ready", Boolean(spot));
-      inspectButton.textContent = spot ? `🔎 ${SPOT_LABELS[spot]}を しらべる！` : "🔎 しらべる";
+      inspectButton.setAttribute("aria-label", spot ? `${SPOT_LABELS[spot]}を しらべる` : "まわりをしらべる");
     }
   }
 
@@ -453,6 +637,11 @@ class ForestScene extends Phaser.Scene {
       for (let x = 0; x < MAP_WIDTH; x++) {
         drawForestTile(g, { x, y }, this.world.tiles[y][x] === 1);
       }
+    }
+    const destination = this.walkPath.at(-1);
+    if (destination) {
+      g.lineStyle(2, 0xffe5a2);
+      g.strokeRoundedRect(destination.x * TILE_SIZE + 3, destination.y * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6, 8);
     }
     for (const [index, encounter] of this.world.encounters.entries()) {
       const creature = findCreature(encounter.id);
@@ -491,10 +680,7 @@ class ForestScene extends Phaser.Scene {
         g.fillEllipse(encounter.position.x * TILE_SIZE + 20, encounter.position.y * TILE_SIZE + 36, 26, 5);
       }
     }
-    const p = this.world.player;
-    g.fillStyle(0x213c3f);
-    g.fillEllipse(p.x * TILE_SIZE + 20, p.y * TILE_SIZE + 33, 23, 8);
-    this.playerSprite.setPosition(p.x * TILE_SIZE + 20, p.y * TILE_SIZE + 20);
+    this.renderPlayer(this.time.now);
     if (this.sparkle) {
       const elapsed = this.time.now - this.sparkle.startMs;
       if (elapsed < 1050) drawDiscoverySparkles(g, this.sparkle.position, elapsed);
@@ -509,6 +695,7 @@ new Phaser.Game({
   width: MAP_WIDTH * TILE_SIZE,
   height: MAP_HEIGHT * TILE_SIZE,
   backgroundColor: "#1a3b36",
+  input: { touch: { capture: false } },
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   scene: [ForestScene],
 });

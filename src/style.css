@@ -9,8 +9,9 @@ button { cursor: pointer; border: 0; border-radius: 12px; background: #e8c681; c
 button:focus-visible { outline: 3px solid white; outline-offset: 2px; }
 .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 #stage { width: min(100%, 760px); position: relative; min-width: 0; }
-#game { width: 100%; overflow: hidden; border: 3px solid #567b6d; border-radius: 14px; background: #1b3530; }
-#game canvas { display: block; width: 100%; height: auto; }
+#game { width: 100%; aspect-ratio: 16 / 11; overflow: hidden; border: 3px solid #567b6d; border-radius: 14px; background: #1b3530; }
+#game canvas { display: block; width: 100%; height: auto; touch-action: pan-y; cursor: pointer; }
+#game canvas:focus-visible { outline: 3px solid #ffe5a2; outline-offset: -3px; }
 #message { width: min(100%, 760px); min-height: 42px; text-align: center; line-height: 1.6; color: #f9e5b5; }
 #controls { display: grid; grid-template-columns: repeat(3, 54px); grid-template-rows: repeat(2, 48px); gap: 5px; touch-action: none; }
 #controls button { padding: 0; font-size: 22px; background: #c3e0bd; user-select: none; -webkit-user-select: none; touch-action: none; }
@@ -20,7 +21,7 @@ button:focus-visible { outline: 3px solid white; outline-offset: 2px; }
 #controls [data-direction="right"] { grid-column: 3; grid-row: 2; }
 footer { color: #aec3ba; font-size: 12px; text-align: center; }
 #encyclopedia, #home { position: absolute; inset: 0; width: 100%; overflow-y: auto; background: #25483f; padding: 20px; border: 2px solid #82aa81; border-radius: 16px; }
-#encyclopedia[hidden], #home[hidden], #controls[hidden], .header-actions button[hidden], #clear-banner[hidden], #expedition-status[hidden] { display: none; }
+#encyclopedia[hidden], #home[hidden], #movement-help[hidden], #controls[hidden], .header-actions button[hidden], #clear-banner[hidden], #expedition-status[hidden] { display: none; }
 .book-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 14px; }
 .book-heading h2 { margin: 0; font-size: 22px; }
 #collection-count { color: #f7df9b; }
@@ -61,24 +62,29 @@ footer { color: #aec3ba; font-size: 12px; text-align: center; }
   .home-friend, .home-friend.is-reacting .home-creature-icon { transition: none; animation: none; }
 }
 
-#inspect { width: min(100%, 260px); background: #b8e6aa; color: #29402f; font-size: 17px; }
+#inspect { width: 116px; padding: 8px; background: #b8e6aa; color: #29402f; font-size: 15px; }
 #inspect[hidden] { display: none; }
 
 /* v1.0: readable instructions and clear discovery feedback across devices. */
 .version-label { font-size: 11px; font-weight: 600; opacity: .75; vertical-align: middle; }
-#expedition-hud { width: min(100%, 760px); display: grid; gap: 6px; padding: 11px 14px; border-radius: 12px; background: #254a40; text-align: center; }
+#expedition-hud { width: min(100%, 760px); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); align-items: center; gap: 12px; padding: 8px 12px; border: 2px solid #8ab89a; border-radius: 12px; background: #254a40; text-align: left; }
 #expedition-hud[hidden] { display: none; }
-#expedition-hud #expedition-status { width: 100%; font-size: 17px; }
+#expedition-hud #expedition-status { width: 100%; font-size: 14px; text-align: left; }
 #explore-tip { font-size: 14px; line-height: 1.5; color: #e7f2cf; }
 #discovery-banner { width: min(100%, 760px); display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px 18px; border-radius: 14px; background: #fff1bb; color: #4a4028; border: 2px solid #f9cc74; }
 #discovery-banner[hidden] { display: none; }
 #discovery-icon { font-size: 42px; }
 #discovery-heading { display: block; font-size: clamp(18px, 4.5vw, 24px); }
 #discovery-detail { margin-top: 4px; font-size: 14px; }
-#inspect { min-height: 50px; transition: background-color 120ms ease, transform 120ms ease; }
-#inspect.inspect-ready { background: #ffe5a2; border: 2px solid #fff2ce; transform: scale(1.03); }
-#controls { grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(2, 54px); gap: 6px; }
-#controls button { min-width: 64px; min-height: 54px; }
+#inspect { min-height: 44px; transition: background-color 120ms ease; }
+#inspect.inspect-ready { background: #ffe5a2; border: 2px solid #fff2ce; }
+#exploration-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; width: min(100%, 760px); }
+#app:not([data-screen="forest"]) #exploration-toolbar { display: none; }
+#movement-help { width: min(100%, 760px); text-align: center; }
+#movement-help summary { cursor: pointer; min-height: 44px; padding: 10px; color: #c3e0bd; font-size: 13px; }
+#movement-help summary:focus-visible { outline: 3px solid #ffe5a2; border-radius: 8px; }
+#controls { grid-template-columns: repeat(3, 48px); grid-template-rows: repeat(2, 44px); gap: 5px; justify-content: center; }
+#controls button { min-width: 48px; min-height: 44px; font-size: 18px; }
 footer { width: min(100%, 760px); line-height: 1.6; }
 @media (max-width: 480px) {
   #app { padding: 10px 8px; gap: 8px; }
@@ -95,29 +101,13 @@ footer { width: min(100%, 760px); line-height: 1.6; }
   #inspect { transition: none; transform: none; }
 }
 
-/* v1.0 review updates: map-corner guidance and center-screen celebration. */
-#stage > #expedition-hud {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 3;
-  width: min(45%, 235px);
-  min-height: 96px;
-  padding: 10px 12px;
-  background: rgba(20, 49, 45, .93);
-  color: #fff4d2;
-  border: 2px solid #8ab89a;
-  border-radius: 12px;
-  pointer-events: none;
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-}
-#stage > #expedition-hud[hidden] { display: none; }
-#stage > #expedition-hud #expedition-status { font-size: clamp(11px, 2.4vw, 15px); line-height: 1.3; }
-#stage > #expedition-hud #explore-tip { font-size: clamp(11px, 2.1vw, 13px); line-height: 1.4; }
+#exploration-guidance { display: flex; align-items: center; gap: 8px; }
+.guidance-text { min-width: 0; }
+#companion-portrait { flex-shrink: 0; }
+#companion-portrait[hidden], #companion-name[hidden] { display: none; }
+#companion-portrait .creature-portrait { width: 32px; height: 32px; margin: 0; }
+#companion-name { display: inline; color: #ffe5a2; font-size: 13px; line-height: 1.5; margin-right: 8px; }
+#explore-tip { display: inline; }
 #inspect:disabled {
   background: #667e73;
   color: #dce5d8;
@@ -151,9 +141,12 @@ footer { width: min(100%, 760px); line-height: 1.6; }
 #announcement-detail { margin: 0 0 22px; font-size: clamp(15px, 3.4vw, 20px); }
 #announcement-close { min-height: 52px; padding-inline: 35px; background: #93c8a4; }
 @media (max-width: 480px) {
-  #stage > #expedition-hud { top: 5px; left: 5px; width: min(48%, 165px); min-height: 77px; padding: 6px 8px; }
-  #stage > #expedition-hud #expedition-status { font-size: 11px; }
-  #stage > #expedition-hud #explore-tip { font-size: 11px; }
+  #expedition-hud { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 7px 10px; }
+  #companion-portrait .creature-portrait { width: 28px; height: 28px; }
+  #companion-name { font-size: 12px; }
+  #expedition-hud #expedition-status { font-size: 12px; }
+  #explore-tip { font-size: 13px; }
+  #inspect { width: 96px; font-size: 14px; }
 }
 
 /* Three distinct screen identities: forest, cozy home, and illustrated storybook. */
