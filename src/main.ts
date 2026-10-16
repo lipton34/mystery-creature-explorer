@@ -38,10 +38,10 @@ app.innerHTML = `
     <p>モリルは 森にくらす ふしぎな なかまたち。</p>
     <p>みつけた なかまたちが まっているよ！</p>
     <div id="home-creatures" class="home-creatures"></div>
-    <p id="home-reaction" role="status" aria-live="polite">モリルを タップしてみよう！</p>
     <button id="start-expedition" type="button">🌲 あたらしい森へ！</button>
   </section>
   </main>
+  <p id="home-reaction" role="status" aria-live="polite" aria-atomic="true">モリルを タップしてみよう！</p>
   <div id="announcement" class="announcement" role="dialog" aria-modal="true" aria-labelledby="announcement-heading" hidden>
     <div class="announcement-card">
       <span id="announcement-icon" class="announcement-icon" aria-hidden="true">✨</span>
@@ -122,6 +122,10 @@ function renderHome(): void {
   const grid = document.querySelector<HTMLElement>("#home-creatures");
   if (!grid) return;
   grid.replaceChildren();
+  if (homeReaction) {
+    homeReaction.textContent = "モリルを タップしてみよう！";
+    homeReaction.classList.remove("is-updated");
+  }
   const found = new Set(loadCollection());
   for (const creature of CREATURES) {
     const unlocked = found.has(creature.id);
@@ -134,12 +138,20 @@ function renderHome(): void {
       button.addEventListener("click", () => {
         const options = reactions[creature.id] ?? [creature.name + "は うれしそう！"];
         const index = reactionIndex.get(creature.id) ?? 0;
-        if (homeReaction) homeReaction.textContent = options[index % options.length];
+        grid.querySelector(".is-selected")?.classList.remove("is-selected");
+        button.classList.add("is-selected");
+        if (homeReaction) {
+          const text = document.createElement("span");
+          text.textContent = options[index % options.length];
+          homeReaction.replaceChildren(createCreaturePortrait(creature.id), text);
+          homeReaction.classList.remove("is-updated");
+        }
         reactionIndex.set(creature.id, index + 1);
         // Restart the brief bounce animation after every interaction.
         button.classList.remove("is-reacting");
         void button.offsetWidth;
         button.classList.add("is-reacting");
+        homeReaction?.classList.add("is-updated");
       });
       button.addEventListener("animationend", () => button.classList.remove("is-reacting"));
     }
@@ -177,7 +189,6 @@ function showHome(open: boolean): void {
 
   if (open) {
     renderHome();
-    if (homeReaction) homeReaction.textContent = "モリルを タップしてみよう！";
     say("あたらしい森を たんけんするときは ボタンを おしてね！");
   }
 }
