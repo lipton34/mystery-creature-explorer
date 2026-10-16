@@ -18,15 +18,19 @@ app.innerHTML = `
       <div id="perspective-game" aria-label="主観視点の探索画面"></div>
       <section id="encyclopedia" aria-label="モリルの図鑑" hidden><div class="book-heading"><h2>モリルのずかん</h2><span id="collection-count"></span></div><div id="encyclopedia-grid"></div></section>
     </div>
-    <aside class="map-panel" aria-label="自動で埋まる地図"><canvas id="auto-map" role="img" aria-label="自動マップ"></canvas></aside>
+    <aside class="map-panel" aria-label="自動マップと探索のヒント">
+      <canvas id="auto-map" role="img" aria-label="自動マップ"></canvas>
+      <div class="exploration-hints">
+        <p id="view-status" role="status" aria-live="polite"></p>
+        <p id="prototype-message" class="prototype-message" role="status" aria-live="polite">木漏れ日の先から、水の流れる音がする。道を進み、足元や木々の間を見てみよう。</p>
+      </div>
+    </aside>
   </main>
   <div class="perspective-tools">
-    <p id="view-status" role="status" aria-live="polite"></p>
     <div class="perspective-actions" role="group" aria-label="主観視点の移動"><button type="button" data-action="left">↶ 左を向く</button><button type="button" data-action="forward">↑ 前へ</button><button type="button" data-action="right">右を向く ↷</button><button type="button" data-action="strafe-left">← 左へ移動</button><button type="button" data-action="backward">↓ 後ろへ</button><button type="button" data-action="strafe-right">右へ移動 →</button></div>
     <button id="prototype-inspect" type="button">調べる</button>
     <button id="tail-replay" type="button" hidden>目撃地点から再生</button>
   </div>
-  <p id="prototype-message" class="prototype-message" role="status" aria-live="polite">木漏れ日の先から、水の流れる音がする。道を進み、足元や木々の間を見てみよう。</p>
   <footer>上下キー・W/S：前進／後退、左右キー・A/D：方向転換、Q/E：視点を変えずに左右へ移動、Space：調べる。ボタンでも操作できます。地図は移動先の指定には使いません。<br>今回は川辺の目撃から、渡れる場所を見つけて対岸へ進むまで。大型モリルの全身・発見イベントは未制作です。探索記録は再読み込みでリセットされ、図鑑・お気に入りは変更しません。</footer>
 `;
 
