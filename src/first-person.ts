@@ -6,13 +6,16 @@ import { applyExplorationAction, canWitnessTail, createPerspectiveState, explora
 import { drawPerspective, VIEW_HEIGHT, VIEW_WIDTH } from "./perspective-renderer";
 import { EXPLORATION_MESSAGES, messageAfterAction } from "./perspective-messages";
 import { SIGHTING_DURATION } from "./moriru-sighting";
+import { LayeredVista, preloadVista } from "./layered-vista";
+
+const layeredArt = new URLSearchParams(window.location.search).get("art") !== "geometry";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app is missing");
 app.className = "perspective-app";
 app.innerHTML = `
   <header>
-    <div><h1>木漏れ日の小川</h1><p class="prototype-label">ステージ1・導線の確認版／仮の描画</p></div>
+    <div><h1>木漏れ日の小川</h1><p class="prototype-label">${layeredArt ? "川辺の画像レイヤー確認版／ほかの場所は仮描画" : "ステージ1・仮図形との比較版"}</p></div>
     <div class="header-actions"><button id="prototype-book" type="button" aria-expanded="false" aria-controls="encyclopedia">ずかんをみる</button><button id="prototype-reset" type="button">最初から</button><a href="./">おうちへ</a></div>
   </header>
   <main class="perspective-layout">
@@ -53,6 +56,7 @@ const actionButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[
 class PerspectiveScene extends Phaser.Scene {
   private state = createPerspectiveState();
   private graphics!: Phaser.GameObjects.Graphics;
+  private vista?: LayeredVista;
   private transition?: { from: ViewPose; to: ViewPose; startedAt: number; action: ExplorationAction; arrivalMessage?: string };
   private tailStartedAt?: number;
   private bookOpen = false;
@@ -61,8 +65,13 @@ class PerspectiveScene extends Phaser.Scene {
 
   constructor() { super("PerspectivePrototype"); }
 
+  preload(): void {
+    if (layeredArt) preloadVista(this);
+  }
+
   create(): void {
     this.graphics = this.add.graphics();
+    if (layeredArt) this.vista = new LayeredVista(this);
     this.game.canvas.tabIndex = 0;
     this.game.canvas.setAttribute("aria-label", "主観視点。矢印キーで前進・後退・方向転換、QとEで横移動、スペースで調査。");
     for (const button of actionButtons) button.addEventListener("click", () => this.act(button.dataset.action as ExplorationAction));
@@ -215,7 +224,8 @@ class PerspectiveScene extends Phaser.Scene {
       }
     }
     const tailProgress = this.tailStartedAt === undefined ? undefined : (time - this.tailStartedAt) / SIGHTING_DURATION;
-    drawPerspective(this.graphics, pose, tailProgress, this.reduceMotion ? 0 : time, this.reduceMotion);
+    const vistaOpacity = this.vista?.draw(pose, tailProgress, this.reduceMotion) ?? 0;
+    drawPerspective(this.graphics, pose, vistaOpacity > 0 ? undefined : tailProgress, this.reduceMotion ? 0 : time, this.reduceMotion);
     if (tailProgress !== undefined && tailProgress >= 1) {
       this.tailStartedAt = undefined;
       this.showMessage(EXPLORATION_MESSAGES.afterTail);
