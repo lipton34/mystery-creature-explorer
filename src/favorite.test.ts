@@ -16,6 +16,29 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("favorite Moriru", () => {
+  it("clears a favorite across reloads without changing discoveries and allows selecting again", async () => {
+    const favorite = await import("./favorite");
+    const collection = stored.get(COLLECTION_KEY);
+    favorite.selectFavorite("mossling");
+    expect(favorite.clearFavorite()).toBe("saved");
+    expect(favorite.loadFavorite()).toBeNull();
+    expect(stored.get(COLLECTION_KEY)).toBe(collection);
+    vi.resetModules();
+    const restored = await import("./favorite");
+    expect(restored.loadFavorite()).toBeNull();
+    expect(restored.selectFavorite("acorn")).toBe("saved");
+    expect(restored.loadFavorite()).toBe("acorn");
+  });
+
+  it("keeps a cleared choice in memory when storage still contains the previous favorite", async () => {
+    const { selectFavorite, clearFavorite, loadFavorite } = await import("./favorite");
+    selectFavorite("mossling");
+    vi.mocked(localStorage.setItem).mockImplementation(() => { throw new Error("blocked"); });
+    expect(clearFavorite()).toBe("session-only");
+    expect(stored.get(FAVORITE_KEY)).toBe(JSON.stringify("mossling"));
+    expect(loadFavorite()).toBeNull();
+  });
+
   it("starts without choosing a favorite automatically", async () => {
     const { loadFavorite } = await import("./favorite");
     expect(loadFavorite()).toBeNull();

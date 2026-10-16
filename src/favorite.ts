@@ -2,7 +2,7 @@ import { loadCollection } from "./collection";
 import { findCreature, type CreatureId } from "./creatures";
 
 const KEY = "mystery-creature-explorer:favorite:v1";
-let sessionFavorite: CreatureId | undefined;
+let sessionFavorite: CreatureId | null | undefined;
 
 export function loadFavorite(): CreatureId | null {
   let stored: unknown = sessionFavorite;
@@ -23,6 +23,16 @@ export function selectFavorite(id: string): "saved" | "session-only" | "unavaila
   sessionFavorite = creature.id;
   try {
     localStorage.setItem(KEY, JSON.stringify(creature.id));
+    return "saved";
+  } catch {
+    return "session-only";
+  }
+}
+
+export function clearFavorite(): "saved" | "session-only" {
+  sessionFavorite = null;
+  try {
+    localStorage.setItem(KEY, "null");
     return "saved";
   } catch {
     return "session-only";
