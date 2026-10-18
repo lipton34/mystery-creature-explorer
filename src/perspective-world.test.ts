@@ -5,9 +5,9 @@ import { projectPoint } from "./perspective-renderer";
 describe("first-person exploration prototype", () => {
   it("starts looking north with only the starting floor recorded", () => {
     const state = createPerspectiveState();
-    expect(state.player).toEqual({ x: 2, y: 9 });
+    expect(state.player).toEqual({ x: 2, y: 18 });
     expect(state.heading).toBe(0);
-    expect(state.visited).toEqual(new Set(["2,9"]));
+    expect(state.visited).toEqual(new Set(["2,18"]));
     expect(state.inspectedFootprint).toBe(false);
     expect(state.witnessedTail).toBe(false);
   });
@@ -21,24 +21,24 @@ describe("first-person exploration prototype", () => {
     for (let turns = 0; turns < 4; turns++) applyExplorationAction(state, "right");
     expect(state.heading).toBe(0);
     expect(state.visited.size).toBe(1);
-    expect(state.player).toEqual({ x: 2, y: 9 });
+    expect(state.player).toEqual({ x: 2, y: 18 });
   });
 
   it("moves forward and backward relative to each heading", () => {
     for (const heading of [0, 1, 2]) {
       const state = createPerspectiveState();
-      state.player = heading === 1 ? { x: 4, y: 7 } : { x: 2, y: 8 };
+      state.player = heading === 1 ? { x: 3, y: 12 } : { x: 2, y: 17 };
       state.heading = heading;
       expect(applyExplorationAction(state, "forward")).toBe(true);
-      expect(state.player).toEqual(heading === 0 ? { x: 2, y: 7 } : heading === 1 ? { x: 5, y: 7 } : { x: 2, y: 9 });
+      expect(state.player).toEqual(heading === 0 ? { x: 2, y: 16 } : heading === 1 ? { x: 4, y: 12 } : { x: 2, y: 18 });
       expect(applyExplorationAction(state, "backward")).toBe(true);
-      expect(state.player).toEqual(heading === 1 ? { x: 4, y: 7 } : { x: 2, y: 8 });
+      expect(state.player).toEqual(heading === 1 ? { x: 3, y: 12 } : { x: 2, y: 17 });
     }
     const west = createPerspectiveState();
-    west.player = { x: 3, y: 7 };
+    west.player = { x: 3, y: 12 };
     west.heading = 3;
     expect(applyExplorationAction(west, "forward")).toBe(true);
-    expect(west.player).toEqual({ x: 2, y: 7 });
+    expect(west.player).toEqual({ x: 2, y: 12 });
   });
 
   it("rejects walls and map boundaries without recording a step", () => {
@@ -57,7 +57,7 @@ describe("first-person exploration prototype", () => {
     const state = createPerspectiveState();
     applyExplorationAction(state, "forward");
     applyExplorationAction(state, "forward");
-    expect(state.visited).toEqual(new Set(["2,9", "2,8", "2,7"]));
+    expect(state.visited).toEqual(new Set(["2,18", "2,17", "2,16"]));
     const known = knownMapCells(state);
     expect(known.filter(({ floor }) => floor).map(({ position }) => tileKey(position)).sort()).toEqual([...state.visited].sort());
     expect(known.some(({ position }) => tileKey(position) === "3,7")).toBe(false);
@@ -69,6 +69,8 @@ describe("first-person exploration prototype", () => {
   it("inspects footprints only underfoot or directly ahead without moving or revealing the map", () => {
     const state = createPerspectiveState();
     expect(inspectFootprint(state)).toBe(false);
+    state.player = { x: FOOTPRINT.x + 2, y: FOOTPRINT.y };
+    state.heading = 3;
     applyExplorationAction(state, "forward");
     const before = [...state.visited];
     expect(footprintInReach(state)).toBe(true);
@@ -111,14 +113,14 @@ describe("first-person exploration prototype", () => {
   });
 
   it("casts cardinal rays to the first wall and projects only visible points in front", () => {
-    const pose = { x: 2.5, y: 9.5, angle: 0 };
-    expect(wallHit(pose, 0).distance).toBeCloseTo(2.5);
+    const pose = { x: 2.5, y: 18.5, angle: 0 };
+    expect(wallHit(pose, 0).distance).toBeCloseTo(6.5);
     expect(wallHit(pose, Math.PI / 2).distance).toBeCloseTo(0.5);
     expect(wallHit(pose, Math.PI).distance).toBeCloseTo(0.5);
     expect(wallHit(pose, -Math.PI / 2).distance).toBeCloseTo(0.5);
-    expect(projectPoint(pose, { x: 2.5, y: 7.5 })?.x).toBe(320);
-    expect(projectPoint(pose, { x: 2.5, y: 10.5 })).toBeUndefined();
-    expect(projectPoint(pose, { x: 4.5, y: 7.5 })).toBeUndefined();
-    expect(projectPoint(pose, { x: 2.5, y: 6.5 })).toBeUndefined();
+    expect(projectPoint(pose, { x: 2.5, y: 16.5 })?.x).toBe(320);
+    expect(projectPoint(pose, { x: 2.5, y: 19.5 })).toBeUndefined();
+    expect(projectPoint(pose, { x: 4.5, y: 16.5 })).toBeUndefined();
+    expect(projectPoint(pose, { x: 2.5, y: 11.5 })).toBeUndefined();
   });
 });

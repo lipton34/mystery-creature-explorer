@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import type Phaser from "phaser";
 import { SIGHTING_DURATION, tailSection, TAIL_SEGMENTS } from "./moriru-sighting";
 import { drawPerspective, projectPoint } from "./perspective-renderer";
+import { TAIL_LOOKOUT } from "./perspective-world";
 
-const LOOKOUT_POSE = { x: 5.5, y: 7.5, angle: Math.PI / 2 };
+const LOOKOUT_POSE = { x: TAIL_LOOKOUT.x + 0.5, y: TAIL_LOOKOUT.y + 0.5, angle: Math.PI / 2 };
 
 describe("sideways large Moriru sighting", () => {
   it("moves parallel to the opposite shore without receding or shrinking", () => {
@@ -11,7 +12,7 @@ describe("sideways large Moriru sighting", () => {
     const projected = sections.map((section) => projectPoint(LOOKOUT_POSE, section)!);
     expect(projected.every(Boolean)).toBe(true);
     for (let index = 1; index < projected.length; index++) {
-      expect(projected[index].x).toBeLessThan(projected[index - 1].x);
+      expect(projected[index].x).toBeGreaterThan(projected[index - 1].x);
       expect(projected[index].scale).toBeCloseTo(projected[0].scale);
       expect(projected[index].floor).toBeCloseTo(projected[0].floor);
       expect(sections[index].radius).toBe(sections[0].radius);
@@ -24,11 +25,11 @@ describe("sideways large Moriru sighting", () => {
     const tip = tailSection(0.4, 1);
     expect(base.radius).toBeGreaterThan(0.25);
     expect(base.radius / tip.radius).toBeGreaterThan(30);
-    expect(tip.y - base.y).toBeCloseTo(2.35);
+    expect(base.y - tip.y).toBeCloseTo(2.35);
     let previous = base;
     for (let segment = 1; segment <= TAIL_SEGMENTS; segment++) {
       const current = tailSection(0.4, segment / TAIL_SEGMENTS);
-      expect(current.y).toBeGreaterThan(previous.y);
+      expect(current.y).toBeLessThan(previous.y);
       expect(current.radius).toBeLessThan(previous.radius);
       expect(current.height - current.radius).toBeGreaterThan(0);
       previous = current;
@@ -36,12 +37,12 @@ describe("sideways large Moriru sighting", () => {
   });
 
   it("lets the base pass a tree before the trailing tip", () => {
-    const treeY = 6.13;
-    const basePassing = (9.1 - treeY) / 6.5;
-    const tipPassing = (9.1 + 2.35 - treeY) / 6.5;
+    const treeY = TAIL_LOOKOUT.y + 0.86;
+    const basePassing = (treeY - TAIL_LOOKOUT.y + 4) / 8.5;
+    const tipPassing = (treeY - TAIL_LOOKOUT.y + 4 + 2.35) / 8.5;
     expect(basePassing).toBeGreaterThan(0);
     expect(tipPassing).toBeLessThan(1);
-    expect(tipPassing - basePassing).toBeGreaterThan(0.3);
+    expect(tipPassing - basePassing).toBeGreaterThan(0.25);
     expect(tailSection(basePassing, 0).y).toBeCloseTo(treeY);
     expect(tailSection(tipPassing, 1).y).toBeCloseTo(treeY);
     expect(SIGHTING_DURATION).toBe(5200);
@@ -54,7 +55,7 @@ describe("sideways large Moriru sighting", () => {
       expect(first.height).toBe(last.height);
       expect(first.radius).toBe(last.radius);
       expect(first.x).toBe(last.x);
-      expect(first.y).toBeGreaterThan(last.y);
+      expect(first.y).toBeLessThan(last.y);
     }
   });
 

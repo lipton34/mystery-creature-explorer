@@ -1,24 +1,37 @@
 import type { Point } from "./world";
 
 export const PROTOTYPE_MAP = [
-  "##############",
-  "######~~######",
-  "######~~######",
-  "#####LLLL#####",
-  "#####.~~.#####",
-  "#####.~~.#####",
-  "#####.~~.#####",
-  "##....~~.#####",
-  "##.###~~######",
-  "##.###~~######",
-  "######~~######",
-  "##############",
+  "##################",
+  "#########~~#######",
+  "########LLLL..####",
+  "########.~~##.####",
+  "########.~~##.####",
+  "########.~~##.####",
+  "#######..~~##...##",
+  "#######.#~~####.##",
+  "#######.#~~####.##",
+  "###.....#~~#######",
+  "#####.###~~#######",
+  "#####.############",
+  "##....############",
+  "##.###############",
+  "##.###############",
+  "##.###############",
+  "##.###############",
+  "##.###############",
+  "##.###############",
+  "##################",
 ] as const;
-export const FOOTPRINT: Readonly<Point> = { x: 2, y: 7 };
-export const TAIL_LOOKOUT: Readonly<Point> = { x: 5, y: 7 };
+export const STAGE_START: Readonly<Point> = { x: 2, y: 18 };
+export const IMPACT_POINT: Readonly<Point> = { x: 2, y: 12 };
+export const CALL_POINT: Readonly<Point> = { x: 7, y: 9 };
+export const RIVER_GLIMPSE: Readonly<Point> = { x: 7, y: 6 };
+export const FOOTPRINT: Readonly<Point> = { x: 3, y: 9 };
+export const TAIL_LOOKOUT: Readonly<Point> = { x: 8, y: 6 };
 export const TAIL_HEADING = 1;
-export const LOG_APPROACH: Readonly<Point> = { x: 5, y: 4 };
-export const FAR_BANK: Readonly<Point> = { x: 8, y: 7 };
+export const LOG_APPROACH: Readonly<Point> = { x: 8, y: 3 };
+export const FAR_BANK: Readonly<Point> = { x: 11, y: 2 };
+export const DISCOVERY_POINT: Readonly<Point> = { x: 15, y: 8 };
 export const HEADINGS = ["北", "東", "南", "西"] as const;
 export const FACING_VECTORS: readonly Point[] = [
   { x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 },
@@ -32,6 +45,9 @@ export type PerspectiveState = {
   witnessedTail: boolean;
   inspectedLog: boolean;
   crossedStream: boolean;
+  heardImpact: boolean;
+  heardCall: boolean;
+  discoveredGiant: boolean;
 };
 
 export function tileKey(point: Point): string { return `${point.x},${point.y}`; }
@@ -46,8 +62,8 @@ export function terrainAt(point: Point): "path" | "trees" | "water" | "log" {
 }
 
 export function createPerspectiveState(): PerspectiveState {
-  const player = { x: 2, y: 9 };
-  return { player, heading: 0, visited: new Set([tileKey(player)]), inspectedFootprint: false, witnessedTail: false, inspectedLog: false, crossedStream: false };
+  const player = { ...STAGE_START };
+  return { player, heading: 0, visited: new Set([tileKey(player)]), inspectedFootprint: false, witnessedTail: false, inspectedLog: false, crossedStream: false, heardImpact: false, heardCall: false, discoveredGiant: false };
 }
 
 export function explorationDestination(state: PerspectiveState, action: ExplorationAction): Point | undefined {
@@ -86,6 +102,22 @@ export function inspectFootprint(state: PerspectiveState): boolean {
 export function canWitnessTail(state: PerspectiveState): boolean {
   return !state.witnessedTail && state.heading === TAIL_HEADING &&
     state.player.x === TAIL_LOOKOUT.x && state.player.y === TAIL_LOOKOUT.y;
+}
+
+export type StageEvent = "impact" | "call" | "tail" | "discovery";
+
+export function takeStageEvent(state: PerspectiveState): StageEvent | undefined {
+  const at = (point: Readonly<Point>) => state.player.x === point.x && state.player.y === point.y;
+  if (at(IMPACT_POINT) && !state.heardImpact) { state.heardImpact = true; return "impact"; }
+  if (at(CALL_POINT) && !state.heardCall) { state.heardCall = true; return "call"; }
+  if (canWitnessTail(state)) { state.witnessedTail = true; return "tail"; }
+  if (at(DISCOVERY_POINT) && state.heading === 2 && !state.discoveredGiant) { state.discoveredGiant = true; return "discovery"; }
+  return undefined;
+}
+
+export function giantInView(pose: ViewPose): boolean {
+  const angle = Math.atan2(Math.sin(pose.angle - Math.PI), Math.cos(pose.angle - Math.PI));
+  return Math.abs(pose.x - DISCOVERY_POINT.x - 0.5) < 0.1 && Math.abs(pose.y - DISCOVERY_POINT.y - 0.5) < 0.1 && Math.abs(angle) < 0.5;
 }
 
 export function inspectionTarget(state: PerspectiveState): "footprint" | "log" | "water" | undefined {

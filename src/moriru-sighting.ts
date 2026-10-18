@@ -1,3 +1,5 @@
+import { TAIL_LOOKOUT } from "./perspective-world";
+
 export const SIGHTING_DURATION = 5200;
 export const TAIL_SEGMENTS = 72;
 
@@ -9,8 +11,8 @@ export function tailSection(progress: number, along: number, reduceMotion = fals
   const weightShift = reduceMotion ? 0 : Math.sin(phase * Math.PI * 4) * 0.025;
   const sway = reduceMotion ? 0 : Math.sin(phase * Math.PI * 2 - length * 1.4) * 0.04 * length;
   return {
-    x: 8.65,
-    y: 9.1 - phase * 6.5 + length * 2.35,
+    x: TAIL_LOOKOUT.x + 2.85,
+    y: TAIL_LOOKOUT.y - 4 + phase * 8.5 - length * 2.35,
     height: 0.8 - length * 0.14 + Math.sin(length * Math.PI) * 0.08 + weightShift + sway,
     radius: 0.28 * (1 - length) ** 0.95 + 0.006,
   };

@@ -1,7 +1,8 @@
 import type Phaser from "phaser";
-import { terrainAt, wallHit, type ViewPose } from "./perspective-world";
+import { LOG_APPROACH, TAIL_LOOKOUT, terrainAt, wallHit, type ViewPose } from "./perspective-world";
 import { footprintContains } from "./footprint-texture";
 import { tailSection, TAIL_SEGMENTS } from "./moriru-sighting";
+import { drawGiantPreview } from "./giant-preview";
 
 export const VIEW_WIDTH = 640;
 export const VIEW_HEIGHT = 400;
@@ -35,8 +36,9 @@ export function floorPointAt(pose: ViewPose, column: number, row: number): { x: 
   };
 }
 
-export function drawPerspective(g: Phaser.GameObjects.Graphics, pose: ViewPose, tailProgress?: number, time = 0, reduceMotion = false): void {
+export function drawPerspective(g: Phaser.GameObjects.Graphics, pose: ViewPose, tailProgress?: number, time = 0, reduceMotion = false, giant = false): void {
   g.clear();
+  if (giant) { drawGiantPreview(g, reduceMotion ? 0 : time); return; }
   g.fillStyle(0xb7dfe0);
   g.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
   g.fillStyle(0xd5e6b9);
@@ -83,7 +85,7 @@ export function drawPerspective(g: Phaser.GameObjects.Graphics, pose: ViewPose, 
       g.fillRect(column, top + height * 0.17, 4, height * 0.12);
     }
   }
-  const logEnd = projectPoint(pose, { x: 5.5, y: 3.8 });
+  const logEnd = projectPoint(pose, { x: LOG_APPROACH.x + 0.5, y: LOG_APPROACH.y - 0.2 });
   if (logEnd && logEnd.scale < 1200) {
     g.fillStyle(0x765434);
     g.fillEllipse(logEnd.x, logEnd.floor - logEnd.scale * 0.1, logEnd.scale * 0.48, logEnd.scale * 0.28);
@@ -102,9 +104,9 @@ function drawTail(g: Phaser.GameObjects.Graphics, pose: ViewPose, progress: numb
   if (attachment) {
     const center = attachment.floor - attachment.scale * (root.height + 0.35);
     g.fillStyle(0x304f49);
-    g.fillEllipse(attachment.x - attachment.scale * 0.23, center, attachment.scale, attachment.scale * 1.5);
+    g.fillEllipse(attachment.x + attachment.scale * 0.23, center, attachment.scale, attachment.scale * 1.5);
     g.fillStyle(0x496b57);
-    g.fillEllipse(attachment.x - attachment.scale * 0.26, center - attachment.scale * 0.08, attachment.scale * 0.85, attachment.scale * 1.28);
+    g.fillEllipse(attachment.x + attachment.scale * 0.26, center - attachment.scale * 0.08, attachment.scale * 0.85, attachment.scale * 1.28);
   }
   type Edge = { x: number; top: number; bottom: number; radius: number };
   let previous: Edge | undefined;
@@ -141,7 +143,7 @@ function drawTail(g: Phaser.GameObjects.Graphics, pose: ViewPose, progress: numb
 }
 
 function drawShoreTrees(g: Phaser.GameObjects.Graphics, pose: ViewPose): void {
-  for (const tree of [{ x: 8.22, y: 7.86, width: 0.17 }, { x: 8.25, y: 6.13, width: 0.21 }]) {
+  for (const tree of [{ x: TAIL_LOOKOUT.x + 2.55, y: TAIL_LOOKOUT.y + 0.86, width: 0.17 }, { x: TAIL_LOOKOUT.x + 2.58, y: TAIL_LOOKOUT.y - 0.87, width: 0.21 }]) {
     const projected = projectPoint(pose, tree);
     if (!projected || projected.scale > 270) continue;
     const trunkWidth = projected.scale * tree.width;
@@ -165,7 +167,7 @@ function drawShoreTrees(g: Phaser.GameObjects.Graphics, pose: ViewPose): void {
     }
   }
   for (let cluster = 0; cluster < 6; cluster++) {
-    const branch = projectPoint(pose, { x: 8.2, y: 6.1 + cluster * 0.3 });
+    const branch = projectPoint(pose, { x: TAIL_LOOKOUT.x + 2.55, y: TAIL_LOOKOUT.y - 0.9 + cluster * 0.3 });
     if (!branch || branch.scale > 270) continue;
     g.fillStyle(cluster % 2 ? 0x7e9f5c : 0x9abe71);
     g.fillCircle(branch.x, branch.floor - branch.scale * (1.25 + Math.sin(cluster * 2) * 0.05), branch.scale * 0.28);

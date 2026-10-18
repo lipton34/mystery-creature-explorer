@@ -2,18 +2,20 @@ import Phaser from "phaser";
 import "./style.css";
 import "./first-person.css";
 import { renderEncyclopedia } from "./encyclopedia";
-import { applyExplorationAction, canWitnessTail, createPerspectiveState, explorationDestination, FAR_BANK, HEADINGS, inspectionTarget, inspectFootprint, knownMapCells, LOG_APPROACH, PROTOTYPE_MAP, TAIL_HEADING, TAIL_LOOKOUT, terrainAt, type ExplorationAction, type ViewPose } from "./perspective-world";
+import { applyExplorationAction, createPerspectiveState, explorationDestination, FAR_BANK, giantInView, HEADINGS, inspectionTarget, inspectFootprint, knownMapCells, LOG_APPROACH, PROTOTYPE_MAP, takeStageEvent, TAIL_HEADING, TAIL_LOOKOUT, terrainAt, type ExplorationAction, type ViewPose } from "./perspective-world";
 import { drawPerspective, VIEW_HEIGHT, VIEW_WIDTH } from "./perspective-renderer";
 import { EXPLORATION_MESSAGES, messageAfterAction } from "./perspective-messages";
 import { SIGHTING_DURATION } from "./moriru-sighting";
+import { StageAudio } from "./stage-audio";
+import { impactOffset } from "./stage-effects";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app is missing");
 app.className = "perspective-app";
 app.innerHTML = `
   <header>
-    <div><h1>木漏れ日の小川</h1><p class="prototype-label">ステージ1・導線の確認版／仮の描画</p></div>
-    <div class="header-actions"><button id="prototype-book" type="button" aria-expanded="false" aria-controls="encyclopedia">ずかんをみる</button><button id="prototype-reset" type="button">最初から</button><a href="./">おうちへ</a></div>
+    <div><h1>木漏れ日の小川</h1><p class="prototype-label">ステージ1・35歩の探索確認版／全身・背景・効果音は仮素材</p></div>
+    <div class="header-actions"><button id="prototype-sound" type="button" aria-pressed="true">音：あり</button><button id="prototype-book" type="button" aria-expanded="false" aria-controls="encyclopedia">ずかんをみる</button><button id="prototype-reset" type="button">最初から</button><a href="./">おうちへ</a></div>
   </header>
   <main class="perspective-layout">
     <div class="perspective-view">
@@ -32,7 +34,7 @@ app.innerHTML = `
     <button id="prototype-inspect" type="button">調べる</button>
     <button id="tail-replay" type="button" hidden>目撃地点から再生</button>
   </div>
-  <footer>上下キー・W/S：前進／後退、左右キー・A/D：方向転換、Q/E：視点を変えずに左右へ移動、Space：調べる。ボタンでも操作できます。地図は移動先の指定には使いません。<br>今回は川辺の目撃から、渡れる場所を見つけて対岸へ進むまで。大型モリルの全身・発見イベントは未制作です。探索記録は再読み込みでリセットされ、図鑑・お気に入りは変更しません。</footer>
+  <footer>上下キー・W/S：前進／後退、左右キー・A/D：方向転換、Q/E：視点を変えずに左右へ移動、Space：調べる。ボタンでも操作できます。地図は移動先の指定には使いません。<br>入口から音・鳴き声・川辺の目撃・倒木での渡河・全身発見までの流れを確認する版です。効果音は合成音、全身は仮図形です。発見は今回の探索中だけ記録し、既存図鑑への登録・お気に入りは変更しません。</footer>
 `;
 
 function element<ElementType extends HTMLElement>(selector: string): ElementType {
@@ -55,6 +57,8 @@ class PerspectiveScene extends Phaser.Scene {
   private graphics!: Phaser.GameObjects.Graphics;
   private transition?: { from: ViewPose; to: ViewPose; startedAt: number; action: ExplorationAction; arrivalMessage?: string };
   private tailStartedAt?: number;
+  private impactStartedAt?: number;
+  private audio = new StageAudio();
   private bookOpen = false;
   private bookOpenedAt = 0;
   private reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -65,11 +69,19 @@ class PerspectiveScene extends Phaser.Scene {
     this.graphics = this.add.graphics();
     this.game.canvas.tabIndex = 0;
     this.game.canvas.setAttribute("aria-label", "主観視点。矢印キーで前進・後退・方向転換、QとEで横移動、スペースで調査。");
+    const soundButton = element<HTMLButtonElement>("#prototype-sound");
+    soundButton.addEventListener("click", () => {
+      this.audio.setEnabled(!this.audio.enabled);
+      soundButton.textContent = this.audio.enabled ? "音：あり" : "音：なし";
+      soundButton.setAttribute("aria-pressed", String(this.audio.enabled));
+    });
     for (const button of actionButtons) button.addEventListener("click", () => this.act(button.dataset.action as ExplorationAction));
     inspectButton.addEventListener("click", () => this.inspect());
     replayButton.addEventListener("click", () => {
       if (this.bookOpen || this.transition || this.tailStartedAt !== undefined) return;
+      this.audio.unlock();
       this.state.player = { ...TAIL_LOOKOUT };
+      this.state.visited.add(`${TAIL_LOOKOUT.x},${TAIL_LOOKOUT.y}`);
       this.state.heading = TAIL_HEADING;
       this.tailStartedAt = this.time.now;
       this.showMessage(EXPLORATION_MESSAGES.tail);
@@ -80,6 +92,10 @@ class PerspectiveScene extends Phaser.Scene {
       this.state = createPerspectiveState();
       this.transition = undefined;
       this.tailStartedAt = undefined;
+      this.impactStartedAt = undefined;
+      this.audio.stop();
+      this.audio.resume();
+      this.graphics.setPosition(0, 0);
       this.bookOpen = false;
       book.hidden = true;
       bookButton.textContent = "ずかんをみる";
@@ -94,12 +110,15 @@ class PerspectiveScene extends Phaser.Scene {
       bookButton.textContent = this.bookOpen ? "探索にもどる" : "ずかんをみる";
       bookButton.setAttribute("aria-expanded", String(this.bookOpen));
       if (this.bookOpen) {
+        this.audio.pause();
         this.bookOpenedAt = this.time.now;
         renderEncyclopedia();
       } else {
         const pause = this.time.now - this.bookOpenedAt;
         if (this.transition) this.transition.startedAt += pause;
         if (this.tailStartedAt !== undefined) this.tailStartedAt += pause;
+        if (this.impactStartedAt !== undefined) this.impactStartedAt += pause;
+        this.audio.resume();
         this.game.canvas.focus({ preventScroll: true });
       }
       this.refresh();
@@ -114,6 +133,7 @@ class PerspectiveScene extends Phaser.Scene {
     };
     window.addEventListener("keydown", keyHandler);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => window.removeEventListener("keydown", keyHandler));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.audio.dispose());
     this.refresh();
   }
 
@@ -127,6 +147,7 @@ class PerspectiveScene extends Phaser.Scene {
 
   private act(action: ExplorationAction): void {
     if (this.bookOpen || this.transition || this.tailStartedAt !== undefined) return;
+    this.audio.unlock();
     this.game.canvas.focus({ preventScroll: true });
     const from = this.pose();
     const hadCrossedStream = this.state.crossedStream;
@@ -151,6 +172,7 @@ class PerspectiveScene extends Phaser.Scene {
 
   private inspect(): void {
     if (this.bookOpen || this.transition || this.tailStartedAt !== undefined) return;
+    this.audio.unlock();
     const target = inspectionTarget(this.state);
     if (target === "footprint" && inspectFootprint(this.state)) this.showMessage(EXPLORATION_MESSAGES.footprint);
     else if (target === "log") {
@@ -205,17 +227,29 @@ class PerspectiveScene extends Phaser.Scene {
       pose = { x: from.x + (to.x - from.x) * eased, y: from.y + (to.y - from.y) * eased, angle: from.angle + (to.angle - from.angle) * eased };
       if (progress === 1) {
         this.transition = undefined;
-        if (canWitnessTail(this.state)) {
-          this.state.witnessedTail = true;
+        const event = takeStageEvent(this.state);
+        if (event === "tail") {
           this.tailStartedAt = time;
           this.showMessage(EXPLORATION_MESSAGES.tail);
         }
+        else if (event === "impact") {
+          this.impactStartedAt = time;
+          this.audio.play("impact");
+          this.showMessage(EXPLORATION_MESSAGES.impact);
+        }
+        else if (event === "call") {
+          this.audio.play("call");
+          this.showMessage(EXPLORATION_MESSAGES.call);
+        }
+        else if (event === "discovery") this.showMessage(EXPLORATION_MESSAGES.discovery);
         else this.showMessage(messageAfterAction(message.textContent ?? "", this.state, action, arrivalMessage));
         this.refresh();
       }
     }
     const tailProgress = this.tailStartedAt === undefined ? undefined : (time - this.tailStartedAt) / SIGHTING_DURATION;
-    drawPerspective(this.graphics, pose, tailProgress, this.reduceMotion ? 0 : time, this.reduceMotion);
+    const shake = impactOffset(this.impactStartedAt === undefined ? undefined : time - this.impactStartedAt, this.reduceMotion);
+    this.graphics.setPosition(shake.x, shake.y);
+    drawPerspective(this.graphics, pose, tailProgress, this.reduceMotion ? 0 : time, this.reduceMotion, this.state.discoveredGiant && giantInView(pose));
     if (tailProgress !== undefined && tailProgress >= 1) {
       this.tailStartedAt = undefined;
       this.showMessage(EXPLORATION_MESSAGES.afterTail);
