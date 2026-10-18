@@ -8,6 +8,7 @@ import { EXPLORATION_MESSAGES, messageAfterAction } from "./perspective-messages
 import { SIGHTING_DURATION } from "./moriru-sighting";
 import { StageAudio } from "./stage-audio";
 import { impactOffset } from "./stage-effects";
+import { drawStageReactions } from "./stage-reactions";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app is missing");
@@ -58,6 +59,7 @@ class PerspectiveScene extends Phaser.Scene {
   private transition?: { from: ViewPose; to: ViewPose; startedAt: number; action: ExplorationAction; arrivalMessage?: string };
   private tailStartedAt?: number;
   private impactStartedAt?: number;
+  private callStartedAt?: number;
   private audio = new StageAudio();
   private bookOpen = false;
   private bookOpenedAt = 0;
@@ -93,6 +95,7 @@ class PerspectiveScene extends Phaser.Scene {
       this.transition = undefined;
       this.tailStartedAt = undefined;
       this.impactStartedAt = undefined;
+      this.callStartedAt = undefined;
       this.audio.stop();
       this.audio.resume();
       this.graphics.setPosition(0, 0);
@@ -118,6 +121,7 @@ class PerspectiveScene extends Phaser.Scene {
         if (this.transition) this.transition.startedAt += pause;
         if (this.tailStartedAt !== undefined) this.tailStartedAt += pause;
         if (this.impactStartedAt !== undefined) this.impactStartedAt += pause;
+        if (this.callStartedAt !== undefined) this.callStartedAt += pause;
         this.audio.resume();
         this.game.canvas.focus({ preventScroll: true });
       }
@@ -238,6 +242,7 @@ class PerspectiveScene extends Phaser.Scene {
           this.showMessage(EXPLORATION_MESSAGES.impact);
         }
         else if (event === "call") {
+          this.callStartedAt = time;
           this.audio.play("call");
           this.showMessage(EXPLORATION_MESSAGES.call);
         }
@@ -249,7 +254,9 @@ class PerspectiveScene extends Phaser.Scene {
     const tailProgress = this.tailStartedAt === undefined ? undefined : (time - this.tailStartedAt) / SIGHTING_DURATION;
     const shake = impactOffset(this.impactStartedAt === undefined ? undefined : time - this.impactStartedAt, this.reduceMotion);
     this.graphics.setPosition(shake.x, shake.y);
-    drawPerspective(this.graphics, pose, tailProgress, this.reduceMotion ? 0 : time, this.reduceMotion, this.state.discoveredGiant && giantInView(pose));
+    const showGiant = this.state.discoveredGiant && giantInView(pose);
+    drawPerspective(this.graphics, pose, tailProgress, this.reduceMotion ? 0 : time, this.reduceMotion, showGiant);
+    if (!showGiant) drawStageReactions(this.graphics, pose, this.impactStartedAt === undefined ? undefined : time - this.impactStartedAt, this.callStartedAt === undefined ? undefined : time - this.callStartedAt, this.reduceMotion);
     if (tailProgress !== undefined && tailProgress >= 1) {
       this.tailStartedAt = undefined;
       this.showMessage(EXPLORATION_MESSAGES.afterTail);
