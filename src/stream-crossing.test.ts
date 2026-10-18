@@ -41,10 +41,10 @@ describe("stream and fallen-log route", () => {
     applyExplorationAction(state, "right");
     expect(applyExplorationAction(state, "backward")).toBe(false);
     expect(state.player).toEqual(TAIL_LOOKOUT);
-    const pose = { x: 5.5, y: 7.5, angle: Math.PI / 2 };
-    expect(wallHit(pose, pose.angle).distance).toBeCloseTo(3.5);
-    expect(projectPoint(pose, { x: 8.5, y: 7.5 })?.x).toBeCloseTo(320);
-    expect(projectPoint(pose, { x: 10.5, y: 7.5 })).toBeUndefined();
+    const pose = { x: 8.5, y: 6.5, angle: Math.PI / 2 };
+    expect(wallHit(pose, pose.angle).distance).toBeCloseTo(2.5);
+    expect(projectPoint(pose, { x: 10.8, y: 6.5 })?.x).toBeCloseTo(320);
+    expect(projectPoint(pose, { x: 11.5, y: 6.5 })).toBeUndefined();
   });
 
   it("does not reveal the opposite bank or the log on the map from the lookout", () => {
@@ -57,7 +57,7 @@ describe("stream and fallen-log route", () => {
     expect(known.filter(({ floor }) => floor).map(({ position }) => tileKey(position)).sort()).toEqual([...state.visited].sort());
     expect(known.some(({ terrain }) => terrain === "water")).toBe(true);
     expect(known.some(({ terrain }) => terrain === "log")).toBe(false);
-    expect(known.some(({ position }) => position.x >= 8)).toBe(false);
+    expect(known.some(({ position }) => position.x >= FAR_BANK.x)).toBe(false);
   });
 
   it("makes the log observable from the approach and lets a turn reveal its crossing direction", () => {
@@ -81,17 +81,18 @@ describe("stream and fallen-log route", () => {
     expect(state.inspectedFootprint || state.inspectedLog || state.witnessedTail).toBe(false);
   });
 
-  it("has a single continuous route with no branch and no water crossing except the log", () => {
+  it("has a single river crossing, an observation branch and a longer route after crossing", () => {
     const path = authoredPath();
     const floorCount = PROTOTYPE_MAP.join("").split("").filter((tile) => tile === "." || tile === "L").length;
-    expect(path).toHaveLength(floorCount);
+    expect(path).toHaveLength(26);
+    expect(floorCount).toBe(38);
     expect(PROTOTYPE_MAP.every((row) => row.length === PROTOTYPE_MAP[0].length)).toBe(true);
     for (const [index, point] of path.entries()) {
       const neighbors = FACING_VECTORS.filter((vector) => isPrototypeFloor({ x: point.x + vector.x, y: point.y + vector.y }));
-      expect(neighbors).toHaveLength(index === 0 || index === path.length - 1 ? 1 : 2);
+      expect(neighbors.length).toBeGreaterThanOrEqual(index === 0 ? 1 : 2);
     }
     expect(path.findIndex((point) => tileKey(point) === tileKey(TAIL_LOOKOUT))).toBeLessThan(path.findIndex((point) => terrainAt(point) === "log"));
-    expect(path.filter(({ x: horizontal }) => horizontal === 6 || horizontal === 7).every((point) => terrainAt(point) === "log")).toBe(true);
+    expect(path.filter(({ x: horizontal }) => horizontal === 9 || horizontal === 10).every((point) => terrainAt(point) === "log")).toBe(true);
   });
 
   it("allows the whole return route without erasing the map", () => {

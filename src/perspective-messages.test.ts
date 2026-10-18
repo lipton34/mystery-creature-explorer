@@ -28,17 +28,18 @@ describe("perspective messages", () => {
   it("does not reveal the fallen log before reaching it", () => {
     const state = createPerspectiveState();
     expect(travelHint(state)).toBe(EXPLORATION_MESSAGES.start);
-    state.player = { x: 2, y: 8 };
+    state.player = { x: 4, y: 9 };
+    state.heading = 3;
     expect(travelHint(state)).toBe("道に、大きな足跡がある。");
-    state.player = { x: 5, y: 7 };
+    state.player = { x: 8, y: 6 };
     state.heading = 1;
     state.witnessedTail = true;
     expect(travelHint(state)).toBe(EXPLORATION_MESSAGES.afterTail);
-    state.player = { x: 5, y: 4 };
+    state.player = { x: 8, y: 3 };
     state.heading = 0;
     expect(travelHint(state)).toBe("太い幹が、川のほうへ伸びている。");
-    state.player = { x: 8, y: 6 };
+    state.player = { x: 13, y: 6 };
     state.crossedStream = true;
-    expect(travelHint(state)).toBe(EXPLORATION_MESSAGES.waterAfterCrossing);
+    expect(travelHint(state)).toBe("しっぽの主は、森の奥へ向かったようだ。");
   });
 });

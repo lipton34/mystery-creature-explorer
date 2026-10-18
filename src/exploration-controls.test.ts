@@ -24,7 +24,7 @@ describe("view-preserving sideways movement", () => {
   it.each([0, 1, 2, 3])("moves sideways relative to heading %s without turning", (heading) => {
     const state = createPerspectiveState();
     const strafe: ExplorationAction = heading % 2 === 0 ? "strafe-right" : "strafe-left";
-    state.player = heading % 2 === 0 ? { x: 4, y: 7 } : { x: 2, y: 8 };
+    state.player = heading % 2 === 0 ? { x: 3, y: 12 } : { x: 2, y: 17 };
     state.heading = heading;
     const before = { ...state.player };
     const relativeHeading = (heading + (strafe === "strafe-right" ? 1 : 3)) % 4;
@@ -56,9 +56,9 @@ describe("view-preserving sideways movement", () => {
 
   it("can cross a log sideways without requiring investigation or changing direction", () => {
     const state = createPerspectiveState();
-    state.player = { x: 5, y: 3 };
+    state.player = { x: 8, y: 2 };
     for (let step = 0; step < 3; step++) expect(applyExplorationAction(state, "strafe-right")).toBe(true);
-    expect(state.player).toEqual({ x: 8, y: 3 });
+    expect(state.player).toEqual({ x: 11, y: 2 });
     expect(state.heading).toBe(0);
     expect(state.crossedStream).toBe(true);
     expect(state.inspectedLog).toBe(false);
